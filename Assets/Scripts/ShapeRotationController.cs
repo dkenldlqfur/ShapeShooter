@@ -1,9 +1,8 @@
-using UnityEngine;
 using Cysharp.Threading.Tasks;
-using ShapeShooter.Core;
 using System.Threading;
+using UnityEngine;
 
-namespace ShapeShooter.Shape
+namespace ShapeShooter
 {
     public class ShapeRotationController : MonoBehaviour
     {
@@ -21,7 +20,7 @@ namespace ShapeShooter.Shape
                 cts.Cancel();
                 cts.Dispose();
             }
-            cts = new CancellationTokenSource();
+            cts = new();
 
             RotateLoop(cts.Token).Forget();
         }
@@ -68,12 +67,6 @@ namespace ShapeShooter.Shape
                             elapsed += Time.deltaTime;
                             await UniTask.Yield(PlayerLoopTiming.Update, token);
                         }
-                        break;
-
-                    case RotationPatternType.Chaos:
-                         // 매 프레임 랜덤 회전 (어지러움 주의)
-                        transform.Rotate(Random.onUnitSphere * currentLevelData.rotationSpeed * Time.deltaTime);
-                        await UniTask.Yield(PlayerLoopTiming.Update, token);
                         break;
                 }
             }

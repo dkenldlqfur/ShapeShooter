@@ -1,23 +1,19 @@
-using UnityEngine;
-using TMPro;
-using ShapeShooter.Core;
 using Cysharp.Threading.Tasks;
+using TMPro;
+using UnityEngine;
 
-namespace ShapeShooter.UI
+namespace ShapeShooter
 {
-    public class UIManager : MonoBehaviour
+    public class GameUI : MonoBehaviour
     {
-        [Header("상단 - 이전 기록")]
         [SerializeField] private TextMeshProUGUI recordTitleText;
         [SerializeField] private TextMeshProUGUI recordTimeText;
         [SerializeField] private TextMeshProUGUI recordShotsText;
 
-        [Header("하단 - 현재 플레이")]
         [SerializeField] private TextMeshProUGUI stageText;
         [SerializeField] private TextMeshProUGUI timerText;
         [SerializeField] private TextMeshProUGUI shotCountText;
 
-        [Header("패널")]
         [SerializeField] private GameObject gameClearPanel;
         [SerializeField] private GameObject gameOverPanel;
 
@@ -54,7 +50,7 @@ namespace ShapeShooter.UI
             if (null == GameManager.Instance)
                 return;
 
-            StageRecord record = GameManager.Instance.GetStageRecord(stageIndex);
+            var record = GameManager.Instance.GetStageRecord(stageIndex);
 
             if (null != recordTitleText)
                 recordTitleText.text = "이전 기록";

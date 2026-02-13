@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace ShapeShooter.Shape
+namespace ShapeShooter
 {
     public interface IShapeFace
     {

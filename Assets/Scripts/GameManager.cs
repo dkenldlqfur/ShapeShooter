@@ -1,9 +1,8 @@
-using UnityEngine;
 using Cysharp.Threading.Tasks;
-using UnityEngine.SceneManagement;
 using System;
+using UnityEngine;
 
-namespace ShapeShooter.Core
+namespace ShapeShooter
 {
     /// <summary>
     /// 스테이지 클리어 기록 구조체
@@ -23,8 +22,6 @@ namespace ShapeShooter.Core
         public event Action<int> OnStageChanged;
         public event Action OnGameClear;
         public event Action OnGameOver;
-
-        [Header("Settings")]
         [SerializeField] private LevelData[] levels;
 
         public int CurrentStageIndex { get; private set; }
@@ -42,7 +39,9 @@ namespace ShapeShooter.Core
                 DontDestroyOnLoad(gameObject);
             }
             else
+            {
                 Destroy(gameObject);
+            }
         }
 
         private void Start()
@@ -64,6 +63,9 @@ namespace ShapeShooter.Core
                 return;
             }
 
+            // 잔여 총알 제거
+            ClearAllBullets();
+
             IsGameActive = false;
             CurrentStageIndex = stageIndex;
             ShotCount = 0;
@@ -74,7 +76,12 @@ namespace ShapeShooter.Core
             if (null != currentShapeGameObj)
                 Destroy(currentShapeGameObj);
 
-            LevelData levelData = levels[stageIndex];
+            // 플레이어 위치 초기화
+            var player = FindAnyObjectByType<Player>();
+            if (null != player)
+                player.ResetPosition();
+
+            var levelData = levels[stageIndex];
             if (null != levelData && null != levelData.shapePrefab)
                 currentShapeGameObj = Instantiate(levelData.shapePrefab, Vector3.zero, Quaternion.identity);
 
@@ -137,6 +144,28 @@ namespace ShapeShooter.Core
             }
         }
 
+        private void ClearAllBullets()
+        {
+            var bullets = FindObjectsByType<Bullet>(FindObjectsSortMode.None);
+            foreach (var bullet in bullets)
+            {
+                if (null != bullet && bullet.gameObject.activeInHierarchy)
+                {
+                    // 안전장치: 플레이어에게 Bullet 컴포넌트가 붙어있는 경우 파괴 방지
+                    if (bullet.GetComponent<Player>() != null)
+                    {
+                        Debug.LogWarning("경고: 플레이어 오브젝트에 'Bullet' 스크립트가 붙어있습니다! Inspector에서 제거해주세요.");
+                        continue;
+                    }
+
+                    if (null != BulletPool.Instance)
+                        BulletPool.Instance.Return(bullet);
+                    else
+                        Destroy(bullet.gameObject);
+                }
+            }
+        }
+
         public LevelData GetCurrentLevelData()
         {
             if (levels.Length > CurrentStageIndex)
@@ -154,7 +183,7 @@ namespace ShapeShooter.Core
         /// </summary>
         public void SaveStageRecord(int stageIndex, float time, int shots)
         {
-            StageRecord existing = GetStageRecord(stageIndex);
+            var existing = GetStageRecord(stageIndex);
 
             // 기록이 없거나 더 빠른 시간이면 갱신
             if (!existing.hasRecord || time < existing.clearTime)
@@ -172,8 +201,10 @@ namespace ShapeShooter.Core
         /// </summary>
         public StageRecord GetStageRecord(int stageIndex)
         {
-            StageRecord record = new StageRecord();
-            record.hasRecord = 1 == PlayerPrefs.GetInt($"Stage_{stageIndex}_HasRecord", 0);
+            StageRecord record = new()
+            {
+                hasRecord = 1 == PlayerPrefs.GetInt($"Stage_{stageIndex}_HasRecord", 0)
+            };
 
             if (record.hasRecord)
             {

@@ -1,15 +1,13 @@
 using UnityEngine;
 
-namespace ShapeShooter.Core
+namespace ShapeShooter
 {
     [CreateAssetMenu(fileName = "LevelData", menuName = "ShapeShooter/LevelData")]
     public class LevelData : ScriptableObject
     {
-        [Header("Shape Settings")]
         public GameObject shapePrefab;
         public float rotationSpeed = 10f;
         
-        [Header("Difficulty")]
         public RotationPatternType rotationPattern;
         public int requiredHitsPerFace = 1;
         public Color[] stageColors;
@@ -21,6 +19,5 @@ namespace ShapeShooter.Core
         SingleAxis,
         MultiAxis,
         Random,
-        Chaos
     }
 }

@@ -1,9 +1,6 @@
 using UnityEngine;
-using System.Linq;
-using ShapeShooter.Core;
-using Cysharp.Threading.Tasks;
 
-namespace ShapeShooter.Shape
+namespace ShapeShooter
 {
     public class ShapeManager : MonoBehaviour
     {
@@ -37,21 +34,19 @@ namespace ShapeShooter.Shape
             totalFaces = faces.Length;
             completedFaces = 0;
 
+            // 레벨 데이터 로드
+            LevelData levelData = null;
+            if (null != GameManager.Instance)
+                levelData = GameManager.Instance.GetCurrentLevelData();
+
             foreach (var face in faces)
             {
-                face.Initialize(Color.white); // 초기 색상
+                face.Initialize(levelData);
                 face.OnFaceCompleted += HandleFaceCompleted;
             }
 
-            // 레벨 데이터 로드 (GameManager에서 가져온다고 가정)
-            if (null != GameManager.Instance)
-            {
-                var levelData = GameManager.Instance.GetCurrentLevelData();
-                if (null != levelData && null != rotationController)
-                {
-                    rotationController.Initialize(levelData);
-                }
-            }
+            if (null != levelData && null != rotationController)
+                rotationController.Initialize(levelData);
         }
 
         private void HandleFaceCompleted()
@@ -64,9 +59,7 @@ namespace ShapeShooter.Shape
         {
             // 모든 면이 완료되었는지 확인
             if (totalFaces <= completedFaces)
-            {
                 OnStageClear();
-            }
         }
 
         private void OnStageClear()
@@ -82,14 +75,11 @@ namespace ShapeShooter.Shape
         
         private void OnDestroy()
         {
-             if (null != faces)
-             {
-                 foreach (var face in faces)
-                 {
-                     if (null != face)
-                        face.OnFaceCompleted -= HandleFaceCompleted;
-                 }
-             }
+            foreach (var face in faces)
+            {
+                if (null != face)
+                    face.OnFaceCompleted -= HandleFaceCompleted;
+            }
         }
     }
 }

@@ -22,6 +22,12 @@ namespace ShapeShooter
         public event Action<int> OnStageChanged;
         public event Action OnGameClear;
         public event Action OnGameOver;
+
+        [Header("Prefabs")]
+        [SerializeField] private GameObject playerPrefab;
+        [SerializeField] private GameObject bulletPoolPrefab;
+
+        [Header("Levels")]
         [SerializeField] private LevelData[] levels;
 
         public int CurrentStageIndex { get; private set; }
@@ -29,6 +35,8 @@ namespace ShapeShooter
         public int ShotCount { get; private set; }
         public bool IsGameActive { get; private set; }
 
+        private GameObject currentPlayer;
+        private GameObject currentBulletManager;
         private GameObject currentShapeGameObj;
 
         private void Awake()
@@ -44,19 +52,22 @@ namespace ShapeShooter
             }
         }
 
-        private void Start()
+        public async UniTaskVoid StartGame()
         {
-            StartGame().Forget();
-        }
+            // 필수 오브젝트 동적 생성
+            if (null != playerPrefab)
+                currentPlayer = Instantiate(playerPrefab);
 
-        private async UniTaskVoid StartGame()
-        {
+            if (null != bulletPoolPrefab)
+                currentBulletManager = Instantiate(bulletPoolPrefab);
+
             CurrentStageIndex = 0;
             await LoadStage(CurrentStageIndex);
         }
 
         public async UniTask LoadStage(int stageIndex)
         {
+            // 멀티라인 블록이므로 유지
             if (levels.Length <= stageIndex)
             {
                 EndGame(true);
@@ -77,9 +88,11 @@ namespace ShapeShooter
                 Destroy(currentShapeGameObj);
 
             // 플레이어 위치 초기화
-            var player = FindAnyObjectByType<Player>();
-            if (null != player)
-                player.ResetPosition();
+            if (null != currentPlayer)
+            {
+                if (currentPlayer.TryGetComponent<Player>(out var playerComp))
+                    playerComp.ResetPosition();
+            }
 
             var levelData = levels[stageIndex];
             if (null != levelData && null != levelData.shapePrefab)
@@ -142,6 +155,21 @@ namespace ShapeShooter
                 Debug.Log("게임 오버");
                 OnGameOver?.Invoke();
             }
+
+            // 게임 종료 시 동적 생성된 오브젝트 정리
+            if (null != currentPlayer) 
+                Destroy(currentPlayer);
+            
+            if (null != currentBulletManager) 
+                Destroy(currentBulletManager);
+            
+            if (null != currentShapeGameObj) 
+                Destroy(currentShapeGameObj);
+
+            // 타이틀 화면 다시 표시 (GameUI.ShowTitle 호출)
+            var gameUI = FindAnyObjectByType<GameUI>();
+            if (null != gameUI)
+                gameUI.ShowStartBtn();
         }
 
         private void ClearAllBullets()
@@ -152,14 +180,14 @@ namespace ShapeShooter
                 if (null != bullet && bullet.gameObject.activeInHierarchy)
                 {
                     // 안전장치: 플레이어에게 Bullet 컴포넌트가 붙어있는 경우 파괴 방지
-                    if (bullet.GetComponent<Player>() != null)
+                    if (null != bullet.GetComponent<Player>())
                     {
                         Debug.LogWarning("경고: 플레이어 오브젝트에 'Bullet' 스크립트가 붙어있습니다! Inspector에서 제거해주세요.");
                         continue;
                     }
 
-                    if (null != BulletPool.Instance)
-                        BulletPool.Instance.Return(bullet);
+                    if (null != BulletManager.Instance)
+                        BulletManager.Instance.Return(bullet);
                     else
                         Destroy(bullet.gameObject);
                 }

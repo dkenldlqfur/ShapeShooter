@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bc00740d4af03b249adf4028bad7442f, type: 3}
-  m_Name: Level_3_MultiAxis
+  m_Name: Level_3
   m_EditorClassIdentifier: Assembly-CSharp::ShapeShooter.Core.LevelData
-  shapePrefab: {fileID: 3218380974423806476, guid: 6b6654cbab13ff94b8f308a1afb49250, type: 3}
+  shapePrefab: {fileID: 6893478411425069058, guid: 6b6654cbab13ff94b8f308a1afb49250, type: 3}
   rotationSpeed: 45
   rotationPattern: 2
   requiredHitsPerFace: 2

@@ -3,9 +3,38 @@ using UnityEngine.Pool;
 
 namespace ShapeShooter
 {
+    /// <summary>
+    /// 총알 오브젝트 풀 관리 (싱글톤). 총알 생성/회수/파괴 담당
+    /// </summary>
     public class BulletManager : MonoBehaviour
     {
-        public static BulletManager Instance { get; private set; }
+        private static BulletManager instance;
+
+        public static BulletManager Instance
+        {
+            get
+            {
+                if (null == instance)
+                {
+                    instance = FindAnyObjectByType<BulletManager>();
+                    if (null == instance)
+                    {
+                        var go = new GameObject("BulletManager");
+                        instance = go.AddComponent<BulletManager>();
+                        
+                        var bPrefab = Resources.Load<Bullet>("Prefabs/Bullet");
+                        if (null != bPrefab)
+                        {
+                            instance.bulletPrefab = bPrefab;
+                            instance.InitPool();
+                        }
+
+                        DontDestroyOnLoad(go);
+                    }
+                }
+                return instance;
+            }
+        }
 
         [SerializeField] private Bullet bulletPrefab;
         [SerializeField] private int defaultCapacity = 20;
@@ -13,23 +42,11 @@ namespace ShapeShooter
 
         private IObjectPool<Bullet> pool;
 
-        private void Awake()
-        {
-            if (null == Instance)
-            {
-                Instance = this;
-            }                
-            else
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            InitPool();
-        }
-
         private void InitPool()
         {
+            if (null == bulletPrefab)
+                return;
+
             pool = new ObjectPool<Bullet>(
                 createFunc: CreateBullet,
                 actionOnGet: OnGetBullet,
@@ -60,17 +77,25 @@ namespace ShapeShooter
             Destroy(bullet.gameObject);
         }
 
-        public Bullet Get(Vector3 position, Quaternion rotation)
+        /// <summary>
+        /// 풀에서 총알을 꺼내 지정 위치/회전으로 배치
+        /// </summary>
+        public Bullet Get(Vector3 position = default, Quaternion rotation = default)
         {
+            if (null == pool)
+                return null;
+
             var bullet = pool.Get();
             bullet.transform.SetPositionAndRotation(position, rotation);
-
             return bullet;
         }
 
+        /// <summary>
+        /// 총알을 풀에 반환
+        /// </summary>
         public void Return(Bullet bullet)
         {
-            if (gameObject.activeInHierarchy)
+            if (gameObject.activeInHierarchy && null != pool)
                 pool.Release(bullet);
         }
     }

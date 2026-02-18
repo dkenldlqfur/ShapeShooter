@@ -4,8 +4,14 @@ using UnityEngine;
 
 namespace ShapeShooter
 {
+    /// <summary>
+    /// 도형 관리. 면 초기화, 완료 카운트 추적, 회전 패턴 제어, 스테이지 클리어 판정
+    /// </summary>
     public class ShapeManager : MonoBehaviour
     {
+        /// <summary>SingleAxis에서 선택 가능한 기본 축 (X, Y, Z)</summary>
+        private static readonly Vector3[] CARDINAL_AXES = { Vector3.right, Vector3.up, Vector3.forward };
+
         private ShapeFace[] faces;
         private LevelData currentLevelData;
         private CancellationTokenSource cts;
@@ -13,42 +19,38 @@ namespace ShapeShooter
         private int totalFaces;
         private int completedFaces;
 
-        private void Awake()
-        {
-        }
+        /// <summary>ReactiveAxis 패턴 전용: 총알 충돌 시 동적으로 변경되는 회전 축</summary>
+        private Vector3 reactiveAxis;
 
         private void Start()
         {
-            // 초기화 (게임 매니저 이벤트 연결 등은 실제 씬 구성 시 필요)
-            // 현재는 Start에서 초기화한다고 가정
             Initialize();
         }
 
+        /// <summary>
+        /// 하위 면 검색, 이벤트 구독, 링크 서브 면 제외 카운트 계산, 회전 시작
+        /// </summary>
         public void Initialize()
         {
             faces = GetComponentsInChildren<ShapeFace>();
             
             if (null == faces || 0 == faces.Length)
-            {
-                Debug.LogError("면(Face)을 찾을 수 없습니다!");
                 return;
-            }
 
             completedFaces = 0;
 
-            // 레벨 데이터 로드
             if (null != GameManager.Instance)
                 currentLevelData = GameManager.Instance.GetCurrentLevelData();
 
-            // 링크된 서브 면은 카운트에서 제외
-            // (링크된 면은 대표 면의 완료 이벤트만 발생시킴)
+            // 링크된 서브 면은 완료 카운트에서 제외 (대표 면만 카운트)
             int linkedSubFaceCount = 0;
             foreach (var face in faces)
             {
                 face.Initialize(currentLevelData);
                 face.OnFaceCompleted += HandleFaceCompleted;
+                face.OnFaceRestored += HandleFaceRestored;
+                face.OnFaceHit += HandleFaceHit;
 
-                // 다른 면의 linkedFaces에 포함된 면은 서브 면으로 간주
                 if (IsLinkedSubFace(face))
                     linkedSubFaceCount++;
             }
@@ -59,7 +61,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 해당 면이 다른 면의 linkedFaces 배열에 포함되어 있는지 확인
+        /// 해당 면이 다른 면의 linkedFaces에 포함된 서브 면인지 확인
         /// </summary>
         private bool IsLinkedSubFace(ShapeFace target)
         {
@@ -78,27 +80,46 @@ namespace ShapeShooter
             return false;
         }
 
+        #region 면 이벤트 핸들러
+
         private void HandleFaceCompleted()
         {
             completedFaces++;
             CheckCompletion();
         }
 
-        private void CheckCompletion()
+        private void HandleFaceRestored()
         {
-            // 모든 면이 완료되었는지 확인
-            if (totalFaces <= completedFaces)
-                OnStageClear();
+            if (0 < completedFaces)
+                completedFaces--;
         }
 
-        private void OnStageClear()
+        /// <summary>
+        /// 면 히트 시 호출. ReactiveAxis 패턴이면 회전 축을 새로 생성
+        /// </summary>
+        private void HandleFaceHit()
         {
-            // 회전 멈춤
-            StopRotation();
+            if (null != currentLevelData && currentLevelData.rotationPattern == RotationPatternType.ReactiveAxis)
+                reactiveAxis = new Vector3(Random.value, Random.value, Random.value).normalized;
+        }
 
-            // GameManager에 알림
+        #endregion
+
+        /// <summary>
+        /// 모든 면이 완료되었으면 스테이지 클리어 처리
+        /// </summary>
+        private void CheckCompletion()
+        {
+            if (totalFaces <= completedFaces)
+                OnStageClear().Forget();
+        }
+
+        private async UniTaskVoid OnStageClear()
+        {
             if (null != GameManager.Instance)
                 GameManager.Instance.CompleteStage();
+
+            await StopRotationGradually();
         }
         
         private void OnDestroy()
@@ -106,17 +127,33 @@ namespace ShapeShooter
             foreach (var face in faces)
             {
                 if (null != face)
+                {
                     face.OnFaceCompleted -= HandleFaceCompleted;
+                    face.OnFaceRestored -= HandleFaceRestored;
+                    face.OnFaceHit -= HandleFaceHit;
+                }
             }
 
-            StopRotation();
+            isRotating = false;
+            cts?.Cancel();
             cts?.Dispose();
         }
 
+        #region 회전 제어
+
+        /// <summary>
+        /// 레벨 데이터의 패턴에 따라 회전 축을 생성하고 회전 루프 시작
+        /// </summary>
         private void StartRotation()
         {
             if (null == currentLevelData)
                 return;
+
+            var axis = GenerateRotationAxis(currentLevelData.rotationPattern);
+
+            // ReactiveAxis는 히트 시 변경되는 필드 기반이므로 초기값 설정
+            if (currentLevelData.rotationPattern == RotationPatternType.ReactiveAxis)
+                reactiveAxis = axis;
 
             isRotating = true;
             
@@ -127,16 +164,59 @@ namespace ShapeShooter
             }
             cts = new();
 
-            RotateLoop(cts.Token).Forget();
+            RotateLoop(axis, cts.Token).Forget();
         }
 
+        /// <summary>
+        /// 회전 패턴에 따라 회전 축 벡터를 생성
+        /// </summary>
+        private Vector3 GenerateRotationAxis(RotationPatternType pattern)
+        {
+            return pattern switch
+            {
+                RotationPatternType.SingleAxis => CARDINAL_AXES[Random.Range(0, CARDINAL_AXES.Length)],
+                RotationPatternType.MultiAxis or RotationPatternType.ReactiveAxis
+                    => new Vector3(Random.value, Random.value, Random.value).normalized,
+                _ => Vector3.zero
+            };
+        }
+
+        /// <summary>
+        /// 즉시 회전 정지
+        /// </summary>
         public void StopRotation()
         {
             isRotating = false;
             cts?.Cancel();
         }
 
-        private async UniTaskVoid RotateLoop(CancellationToken token)
+        /// <summary>
+        /// 2초에 걸쳐 점진적으로 감속 정지 (스테이지 클리어 연출)
+        /// </summary>
+        private async UniTask StopRotationGradually()
+        {
+            isRotating = false;
+            cts?.Cancel();
+            cts?.Dispose();
+            cts = new();
+
+            float duration = 2.0f;
+            float elapsed = 0f;
+            float startSpeed = null != currentLevelData ? currentLevelData.rotationSpeed : 10f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float currentSpeed = Mathf.Lerp(startSpeed, 0f, elapsed / duration);
+                transform.Rotate(Vector3.up * currentSpeed * Time.deltaTime);
+                await UniTask.Yield(PlayerLoopTiming.Update);
+            }
+        }
+
+        /// <summary>
+        /// 패턴별 회전 로직을 매 프레임 실행하는 메인 루프
+        /// </summary>
+        private async UniTaskVoid RotateLoop(Vector3 axis, CancellationToken token)
         {
             if (null == currentLevelData)
                 return;
@@ -146,35 +226,52 @@ namespace ShapeShooter
                 switch (currentLevelData.rotationPattern)
                 {
                     case RotationPatternType.Static:
-                        // 회전 없음
                         await UniTask.Yield(PlayerLoopTiming.Update, token);
                         break;
 
                     case RotationPatternType.SingleAxis:
-                        transform.Rotate(Vector3.up * currentLevelData.rotationSpeed * Time.deltaTime);
+                    case RotationPatternType.MultiAxis:
+                        RotateFixedAxis(axis);
                         await UniTask.Yield(PlayerLoopTiming.Update, token);
                         break;
 
-                    case RotationPatternType.MultiAxis:
-                        transform.Rotate(new Vector3(1, 1, 0) * currentLevelData.rotationSpeed * Time.deltaTime);
+                    case RotationPatternType.ReactiveAxis:
+                        RotateFixedAxis(reactiveAxis);
                         await UniTask.Yield(PlayerLoopTiming.Update, token);
                         break;
 
                     case RotationPatternType.Random:
-                        // 랜덤 축으로 일정 시간 회전 후 변경
-                        Vector3 randomAxis = Random.onUnitSphere;
-                        float duration = Random.Range(2f, 5f);
-                        float elapsed = 0f;
-
-                        while (duration > elapsed && isRotating && !token.IsCancellationRequested)
-                        {
-                            transform.Rotate(randomAxis * currentLevelData.rotationSpeed * Time.deltaTime);
-                            elapsed += Time.deltaTime;
-                            await UniTask.Yield(PlayerLoopTiming.Update, token);
-                        }
+                        await RotateRandom(token);
                         break;
                 }
             }
         }
+
+        /// <summary>
+        /// 고정 축 기반 회전 (SingleAxis, MultiAxis, ReactiveAxis 공용)
+        /// </summary>
+        private void RotateFixedAxis(Vector3 axis)
+        {
+            transform.Rotate(axis * currentLevelData.rotationSpeed * Time.deltaTime);
+        }
+
+        /// <summary>
+        /// 랜덤 축으로 일정 시간(2~5초) 회전 후 새 축으로 전환
+        /// </summary>
+        private async UniTask RotateRandom(CancellationToken token)
+        {
+            var randomAxis = Random.onUnitSphere;
+            float duration = Random.Range(2f, 5f);
+            float elapsed = 0f;
+
+            while (duration > elapsed && isRotating && !token.IsCancellationRequested)
+            {
+                transform.Rotate(randomAxis * currentLevelData.rotationSpeed * Time.deltaTime);
+                elapsed += Time.deltaTime;
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
+            }
+        }
+
+        #endregion
     }
 }

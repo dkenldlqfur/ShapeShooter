@@ -10,26 +10,26 @@ namespace ShapeShooter.Editor
         [MenuItem("Tools/Create Triangle Mesh")]
         public static void CreateTriangleMesh()
         {
-            Mesh mesh = new Mesh();
+            var mesh = new Mesh();
             mesh.name = "Triangle";
 
             // 정삼각형 버텍스 (중심점 0,0,0 기준)
             float size = 1f;
             float height = size * Mathf.Sqrt(3) / 2;
             
-            Vector3[] vertices = new Vector3[]
+            var vertices = new Vector3[]
             {
                 new Vector3(0, height / 2, 0),          // Top
                 new Vector3(-size / 2, -height / 2, 0), // Bottom Left
                 new Vector3(size / 2, -height / 2, 0)   // Bottom Right
             };
 
-            int[] triangles = new int[]
+            var triangles = new int[]
             {
                 0, 1, 2
             };
 
-            Vector2[] uv = new Vector2[]
+            var uv = new Vector2[]
             {
                 new Vector2(0.5f, 1f),
                 new Vector2(0f, 0f),
@@ -44,8 +44,6 @@ namespace ShapeShooter.Editor
             string path = "Assets/Resources/Meshes/Triangle.asset";
             AssetDatabase.CreateAsset(mesh, path);
             AssetDatabase.SaveAssets();
-            
-            Debug.Log($"Triangle Mesh created at {path}");
         }
     }
 }

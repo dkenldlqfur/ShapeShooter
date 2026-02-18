@@ -11,10 +11,10 @@ GameObject:
   - component: {fileID: 2738077834436637641}
   - component: {fileID: 505268372097713604}
   - component: {fileID: 1324957915255235210}
-  - component: {fileID: 8709630607215058004}
   - component: {fileID: 5384972059452373416}
+  - component: {fileID: -1241015365603434307}
   m_Layer: 0
-  m_Name: FaceTriangle
+  m_Name: Triangle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -92,20 +92,6 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!114 &8709630607215058004
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2352823696796602331}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fadc61c8d7af2ff42ba65ab039386ceb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: ShapeShooter::ShapeShooter.FaceTriangle
-  meshRenderer: {fileID: 1324957915255235210}
-  linkedFaces: []
 --- !u!64 &5384972059452373416
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -128,3 +114,17 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: 39b1aea308c4d0f4aa97ff2b4e352706, type: 2}
+--- !u!114 &-1241015365603434307
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2352823696796602331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d5e65fa01c67fa4eb83c423f1e2f9c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: ShapeShooter::ShapeShooter.ShapeFace
+  meshRenderer: {fileID: 1324957915255235210}
+  linkedFaces: []

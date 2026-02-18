@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 6405369957324101046}
   - component: {fileID: 9152184151799251469}
   m_Layer: 0
-  m_Name: ShapeCube
+  m_Name: Hexahedron
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

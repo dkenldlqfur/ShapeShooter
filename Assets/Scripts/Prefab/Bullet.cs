@@ -5,6 +5,9 @@ using UnityEngine;
 
 namespace ShapeShooter
 {
+    /// <summary>
+    /// 총알 동작 관리. 전방 직선 이동, 면 충돌 판정, 오브젝트 풀 반환 처리
+    /// </summary>
     public class Bullet : MonoBehaviour
     {
         [SerializeField] private float speed = 20f;
@@ -27,6 +30,9 @@ namespace ShapeShooter
             cts = null;
         }
 
+        /// <summary>
+        /// 수명 초과 시 자동으로 풀에 반환
+        /// </summary>
         private async UniTaskVoid AutoReturnToPool(CancellationToken token)
         {
             bool canceled = await UniTask.Delay(TimeSpan.FromSeconds(lifeTime), cancellationToken: token).SuppressCancellationThrow();
@@ -45,16 +51,29 @@ namespace ShapeShooter
 
         private void OnTriggerEnter(Collider other)
         {
-            // 이미 반환 중이면 무시
             if (isReturning)
                 return;
 
             if (other.TryGetComponent<ShapeFace>(out var face))
-                face.OnHit(transform.position);                
+            {
+                // 면의 바깥쪽 법선: 도형 중심(루트) → 면 위치 방향
+                Vector3 shapeCenter = face.transform.root.position;
+                Vector3 faceOutward = (face.transform.position - shapeCenter).normalized;
+
+                // 내적 > 0: 총알이 안쪽→바깥 방향으로 이동 중 (뒤쪽 충돌) → 무시
+                float dot = Vector3.Dot(faceOutward, transform.forward);
+                if (0f < dot)
+                    return;
+
+                face.OnHit(transform.position);
+            }
 
             ReturnToPool();
         }
 
+        /// <summary>
+        /// 풀에 반환하거나, 풀이 없으면 파괴
+        /// </summary>
         private void ReturnToPool()
         {
             if (isReturning)
@@ -65,7 +84,7 @@ namespace ShapeShooter
             if (null != BulletManager.Instance)
                 BulletManager.Instance.Return(this);
             else
-                Destroy(gameObject); // 풀이 없으면 파괴
+                Destroy(gameObject);
         }
     }
 }

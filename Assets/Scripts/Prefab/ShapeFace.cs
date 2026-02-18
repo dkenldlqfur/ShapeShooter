@@ -3,88 +3,138 @@ using UnityEngine;
 
 namespace ShapeShooter
 {
-    public abstract class ShapeFace : MonoBehaviour
+    /// <summary>
+    /// HP 단계별 색상 정의 (0=White ~ 6=Purple)
+    /// </summary>
+    public enum FaceColorType
     {
-        [SerializeField] protected MeshRenderer meshRenderer;
+        White = 0,
+        Red = 1,
+        Orange = 2,
+        Yellow = 3,
+        Green = 4,
+        Blue = 5,
+        Purple = 6,
+    }
 
-        // 인스펙터에서 연결할 링크된 면들
-        [SerializeField] private ShapeFace[] linkedFaces;
-
-        protected LevelData currentLevelData;
-        protected int currentHitCount = 0;
-        protected bool isCompleted = false;
-
-        // 재귀 호출 방지 플래그
-        private bool isProcessingHit = false;
-
-        public event Action OnFaceCompleted;
-
-        public bool IsCompleted => isCompleted;
-
-        // 링크된 면이 있는지 여부
-        public bool HasLinkedFaces => null != linkedFaces && 0 < linkedFaces.Length;
-
-        // 링크된 면 배열 접근
-        public ShapeFace[] LinkedFaces => linkedFaces;
-
-        public virtual void Initialize(LevelData levelData)
+    /// <summary>
+    /// 도형의 개별 면. HP 관리, 색상 변경, 링크된 면 동기화, 히트/완료/복원 이벤트 발행
+    /// </summary>
+    public class ShapeFace : MonoBehaviour
+    {
+        /// <summary>
+        /// HP 값에 해당하는 Color 반환 (범위 초과 시 클램프)
+        /// </summary>
+        public static Color GetColorByHP(int hp)
         {
-            currentLevelData = levelData;
-            isCompleted = false;
-            currentHitCount = 0;
-            SetColor(Color.white); // 초기 색상
+            var colorType = (FaceColorType)Mathf.Clamp(hp, 0, (int)FaceColorType.Purple);
+            return GetColor(colorType);
         }
 
+        /// <summary>
+        /// FaceColorType에 대응하는 Color 반환
+        /// </summary>
+        public static Color GetColor(FaceColorType type)
+        {
+            return type switch
+            {
+                FaceColorType.White => Color.white,
+                FaceColorType.Red => Color.red,
+                FaceColorType.Orange => new Color(1f, 0.5f, 0f),
+                FaceColorType.Yellow => Color.yellow,
+                FaceColorType.Green => Color.green,
+                FaceColorType.Blue => Color.blue,
+                FaceColorType.Purple => new Color(0.6f, 0.2f, 0.8f),
+                _ => Color.white
+            };
+        }
+
+        [SerializeField] protected MeshRenderer meshRenderer;
+        [SerializeField] private ShapeFace[] linkedFaces;
+
+        protected int currentHP = 0;
+        protected int maxHP = 0;
+        protected bool isCompleted = false;
+
+        /// <summary>링크된 면 간 재귀 호출 방지 플래그</summary>
+        private bool isProcessingHit = false;
+
+        /// <summary>면이 HP 0에 도달하여 완료될 때 발행</summary>
+        public event Action OnFaceCompleted;
+        /// <summary>완료된 면이 다시 히트되어 HP가 복원될 때 발행</summary>
+        public event Action OnFaceRestored;
+        /// <summary>면이 히트될 때마다 발행 (HP 변경 전)</summary>
+        public event Action OnFaceHit;
+
+        public bool IsCompleted => isCompleted;
+        public bool HasLinkedFaces => null != linkedFaces && 0 < linkedFaces.Length;
+        public ShapeFace[] LinkedFaces => linkedFaces;
+
+        /// <summary>
+        /// 레벨 데이터를 기반으로 면 초기화 (HP 설정, 색상 적용)
+        /// </summary>
+        public virtual void Initialize(LevelData levelData)
+        {
+            isCompleted = false;
+
+            if (null != levelData)
+                maxHP = levelData.requiredHitsPerFace;
+            else
+                maxHP = 1;
+
+            currentHP = maxHP;
+            SetColor(GetColorByHP(currentHP));
+        }
+
+        /// <summary>
+        /// 총알 충돌 시 호출. 이벤트 발행 후 HP 변경 처리
+        /// </summary>
         public virtual void OnHit(Vector3 hitPoint)
         {
-            if (isCompleted || isProcessingHit)
+            if (isProcessingHit)
                 return;
 
-            // 히트 처리 (자신 + 링크된 면 모두)
+            OnFaceHit?.Invoke();
             ApplyHit();
         }
 
         /// <summary>
-        /// 히트 적용 (색상 변경 + 완료 체크)
-        /// 링크된 면이 있으면 모든 면에 동시 적용
+        /// HP 변경 → 색상 갱신 → 링크 동기화 → 완료/복원 이벤트 발행
         /// </summary>
         private void ApplyHit()
         {
             isProcessingHit = true;
 
-            currentHitCount++;
+            bool wasCompleted = isCompleted;
 
-            // LevelData가 없거나 색상 설정이 없는 경우 예외 처리 (기본 동작)
-            if (null == currentLevelData || null == currentLevelData.stageColors || 0 == currentLevelData.stageColors.Length)
+            // HP 0이면 1로 복원, 아니면 감소
+            if (0 == currentHP)
             {
-                SetColor(Color.red);
-                PropagateToLinkedFaces(Color.red);
-                CompleteFace();
-                PropagateCompletionToLinkedFaces();
-                isProcessingHit = false;
-                return;
+                currentHP = 1;
+                isCompleted = false;
+            }
+            else
+            {
+                currentHP--;
             }
 
-            // 색상 변경
-            int colorIndex = Mathf.Clamp(currentHitCount - 1, 0, currentLevelData.stageColors.Length - 1);
-            Color color = currentLevelData.stageColors[colorIndex];
+            var color = GetColorByHP(currentHP);
             SetColor(color);
-            PropagateToLinkedFaces(color);
+            PropagateToLinkedFaces(currentHP, color);
 
-            // 완료 체크
-            if (currentLevelData.requiredHitsPerFace <= currentHitCount)
-            {
+            // 상태 전이 이벤트
+            if (wasCompleted)
+                OnFaceRestored?.Invoke();
+            else if (0 == currentHP)
                 CompleteFace();
-                PropagateCompletionToLinkedFaces();
-            }
 
             isProcessingHit = false;
         }
 
         /// <summary>
-        /// 링크된 면들에 색상 전파
+        /// 링크된 면들에 HP, 색상, 완료 상태를 일괄 동기화
         /// </summary>
-        private void PropagateToLinkedFaces(Color color)
+        private void PropagateToLinkedFaces(int hp, Color color)
         {
             if (null == linkedFaces)
                 return;
@@ -94,7 +144,8 @@ namespace ShapeShooter
                 if (null != face && !face.isProcessingHit)
                 {
                     face.isProcessingHit = true;
-                    face.currentHitCount = currentHitCount;
+                    face.currentHP = hp;
+                    face.isCompleted = (0 == hp);
                     face.SetColor(color);
                     face.isProcessingHit = false;
                 }
@@ -102,27 +153,12 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 링크된 면들에 완료 상태 전파
+        /// 면을 완료 상태로 전환하고 이벤트 발행
         /// </summary>
-        private void PropagateCompletionToLinkedFaces()
-        {
-            if (null == linkedFaces)
-                return;
-
-            foreach (var face in linkedFaces)
-            {
-                if (null != face && !face.isCompleted)
-                {
-                    face.isCompleted = true;
-                    // 링크된 면의 OnFaceCompleted는 발생시키지 않음
-                    // (ShapeManager에서 중복 카운트 방지)
-                }
-            }
-        }
-
         protected void CompleteFace()
         {
-            if (isCompleted) return;
+            if (isCompleted)
+                return;
 
             isCompleted = true;
             OnFaceCompleted?.Invoke();

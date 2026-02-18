@@ -4,14 +4,16 @@ using static UnityEngine.InputSystem.InputAction;
 
 namespace ShapeShooter
 {
+    /// <summary>
+    /// 플레이어 조작. 원점 중심 구면 이동, 원점 방향 총알 발사
+    /// </summary>
     public class Player : MonoBehaviour
     {
         [SerializeField] private float orbitSpeed = 50f;
         [SerializeField] private float boostRate = 1.2f;
-
         [SerializeField] private Transform firePoint;
 
-        private Camera mainCamera;
+        private Camera playerCamera;
         private InputAction moveAction;
         private InputAction fireAction;
         private InputAction boostAction;
@@ -21,9 +23,9 @@ namespace ShapeShooter
 
         private void Awake()
         {
-            mainCamera = Camera.main;
+            playerCamera = GetComponentInChildren<Camera>();
 
-            // Input System 초기화 (코드 기반)
+            // 이동 입력: WASD, 방향키, 게임패드 좌스틱
             moveAction = new("Move", binding: "<Gamepad>/leftStick");
             moveAction.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
@@ -35,9 +37,11 @@ namespace ShapeShooter
                 .With("Left", "<Keyboard>/leftArrow")
                 .With("Right", "<Keyboard>/rightArrow");
 
+            // 발사 입력: Space, 마우스 좌클릭
             fireAction = new("Fire", binding: "<Keyboard>/space");
             fireAction.AddBinding("<Mouse>/leftButton");
 
+            // 가속 입력: Left Shift
             boostAction = new("Sprint", binding: "<Keyboard>/leftShift");
 
             initialPosition = transform.position;
@@ -62,78 +66,91 @@ namespace ShapeShooter
 
         private void Update()
         {
+            if (null != GameManager.Instance && !GameManager.Instance.IsGameActive)
+                return;
+
             HandleMovement();
             LookAtTarget();
         }
 
+        /// <summary>
+        /// 카메라가 항상 원점을 바라보도록 LateUpdate에서 갱신
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (null != playerCamera)
+                playerCamera.transform.LookAt(Vector3.zero, transform.up);
+        }
+
+        /// <summary>
+        /// 입력 기반 구면 궤도 이동. 외적으로 회전축을 구하고 쿼터니언 회전 적용
+        /// </summary>
         private void HandleMovement()
         {
             var input = moveAction.ReadValue<Vector2>();
-
-            // 1. 이동 방향 벡터 계산 (현재 회전 기준)
-            // transform.right/up은 현재 플레이어의 로컬 방향 (구면 접선)
             var moveDir = (transform.right * input.x) + (transform.up * input.y);
 
-            // 입력이 없거나 너무 작으면 패스
             if (moveDir.sqrMagnitude < 0.001f)
                 return;
 
-            // 2. 회전축 계산: 위치 벡터와 이동 방향의 외적
+            // 위치 벡터 × 이동 방향 = 회전축
             var axis = Vector3.Cross(transform.position, moveDir).normalized;
 
-            // 3. 쿼터니언 회전 적용
             float speedMultiplier = boostAction.IsPressed() ? boostRate : 1.0f;
             float angle = orbitSpeed * speedMultiplier * Time.deltaTime;
             var rotation = Quaternion.AngleAxis(angle, axis);
 
-            // 위치 갱신
             transform.position = rotation * transform.position;
 
-            // 4. 회전(방향) 갱신: 짐벌 락 방지
-            // 원점을 바라보는 방향 계산
+            // 원점을 바라보는 방향 계산 + 극점 근처 짐벌락 방지
             var forward = (Vector3.zero - transform.position).normalized;
-
-            // Up 벡터를 현재 회전에서 유지하여 극점(pole)에서도 안정적으로 동작
-            // 현재 Up에 회전을 동일하게 적용하여 일관성 유지
             var stableUp = rotation * transform.up;
 
-            // forward와 stableUp이 평행해지는 극단적 상황 방지
+            // forward와 up이 평행하면 right 벡터로 대체
             if (Vector3.Cross(forward, stableUp).sqrMagnitude < 0.001f)
                 stableUp = rotation * transform.right;
 
             transform.rotation = Quaternion.LookRotation(forward, stableUp);
         }
 
+        /// <summary>
+        /// 이동 입력이 없을 때 원점 방향으로 회전 보정
+        /// </summary>
         private void LookAtTarget()
         {
-            // HandleMovement에서 회전을 직접 관리하므로 입력이 없을 때만 보정
             var forward = (Vector3.zero - transform.position).normalized;
             var currentUp = transform.up;
 
-            // forward와 현재 Up이 평행하면 Right 벡터를 사용
             if (Vector3.Cross(forward, currentUp).sqrMagnitude < 0.001f)
                 currentUp = transform.right;
 
             transform.rotation = Quaternion.LookRotation(forward, currentUp);
         }
 
+        /// <summary>
+        /// 발사 입력 시 firePoint에서 원점 방향으로 총알 생성
+        /// </summary>
         private void OnFire(CallbackContext context)
         {
+            if (null != GameManager.Instance && !GameManager.Instance.IsGameActive)
+                return;
+
             if (null == firePoint)
                 return;
 
-            // (0,0,0)을 향하는 회전 계산
             var direction = (Vector3.zero - firePoint.position).normalized;
             var lookRotation = Quaternion.LookRotation(direction);
 
             if (null != BulletManager.Instance)
+            {
                 BulletManager.Instance.Get(firePoint.position, lookRotation);
-
-            // 발사 횟수 기록
-            if (null != GameManager.Instance)
                 GameManager.Instance.IncrementShotCount();
+            }
         }
 
+        /// <summary>
+        /// 위치/회전을 초기값으로 리셋 (스테이지 전환 시 사용)
+        /// </summary>
         public void ResetPosition()
         {
             transform.SetPositionAndRotation(initialPosition, initialRotation);

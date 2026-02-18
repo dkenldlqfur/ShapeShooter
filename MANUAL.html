@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShapeShooter 게임 매뉴얼</title>
+    <style>
+        body {
+            background-color: #f0f0f0;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .page {
+            max-width: 21cm;
+            min-height: 29.7cm;
+            margin: 0 auto;
+            background-color: white;
+            padding: 2.54cm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        h1 {
+            font-size: 24pt;
+            color: #000;
+            margin-top: 0;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        h2 {
+            font-size: 14pt;
+            color: #444;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        h3 {
+            font-size: 12pt;
+            color: #666;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        p {
+            margin-bottom: 15px;
+            font-size: 11pt;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 10pt;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f9f9f9;
+            font-weight: bold;
+        }
+        .alert {
+            background-color: #e8f0fe;
+            border-left: 4px solid #4285f4;
+            padding: 10px 15px;
+            margin: 15px 0;
+            font-size: 10pt;
+            color: #1a73e8;
+            border-radius: 4px;
+        }
+        .alert strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        code {
+            background-color: #f1f3f4;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        ul, ol {
+            margin-bottom: 15px;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        hr {
+            border: 0;
+            border-top: 1px solid #eee;
+            margin: 30px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <h1>🎯 ShapeShooter 게임 매뉴얼</h1>
+
+        <h2>게임 소개</h2>
+        <p><strong>ShapeShooter</strong>는 3인칭 숄더뷰 시점에서 회전하는 3D 도형의 모든 면을 맞춰 색을 바꾸는 슈팅 퍼즐 게임입니다.</p>
+        <p>플레이어는 원점에 떠 있는 도형 주위를 궤도 이동하며 총알을 발사합니다. 도형의 모든 면이 흰색(HP 0)이 되면 스테이지를 클리어하게 됩니다.</p>
+
+        <hr>
+
+        <h2>조작법</h2>
+        
+        <h3>이동</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>입력</th>
+                    <th>동작</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>W</code> / <code>↑</code></td>
+                    <td>위로 궤도 이동</td>
+                </tr>
+                <tr>
+                    <td><code>S</code> / <code>↓</code></td>
+                    <td>아래로 궤도 이동</td>
+                </tr>
+                <tr>
+                    <td><code>A</code> / <code>←</code></td>
+                    <td>왼쪽으로 궤도 이동</td>
+                </tr>
+                <tr>
+                    <td><code>D</code> / <code>→</code></td>
+                    <td>오른쪽으로 궤도 이동</td>
+                </tr>
+                <tr>
+                    <td><code>Left Shift</code></td>
+                    <td>가속 이동 (1.2배)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="alert">
+            💡 <strong>참고</strong>
+            플레이어는 원점(도형 위치)을 중심으로 구면 위를 이동합니다. 항상 도형을 바라보는 방향을 유지합니다.
+        </div>
+
+        <h3>발사</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>입력</th>
+                    <th>동작</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>Space</code></td>
+                    <td>총알 발사</td>
+                </tr>
+                <tr>
+                    <td>마우스 좌클릭</td>
+                    <td>총알 발사</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="alert">
+            💡 <strong>참고</strong>
+            총알은 항상 원점(도형 중심) 방향으로 발사됩니다.
+        </div>
+
+        <hr>
+
+        <h2>게임 규칙</h2>
+
+        <h3>기본 흐름</h3>
+        <ol>
+            <li><strong>시작 화면</strong> — 시작 버튼을 클릭하여 게임 시작</li>
+            <li><strong>카운트다운</strong> — "3, 2, 1, 시작!" 카운트다운 후 스테이지 시작</li>
+            <li><strong>플레이</strong> — 도형의 모든 면을 맞춰 HP를 0으로 만들기</li>
+            <li><strong>스테이지 클리어</strong> — 모든 면이 완료되면 다음 스테이지로 진행</li>
+            <li><strong>게임 클리어</strong> — 모든 스테이지를 클리어하면 게임 완료</li>
+        </ol>
+
+        <h3>면(Face) 시스템</h3>
+        <p>각 면은 <strong>HP</strong>를 가지고 있으며, 총알이 맞을 때마다 1씩 감소합니다.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>HP</th>
+                    <th>색상</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>6</td><td>🟣 보라</td></tr>
+                <tr><td>5</td><td>🔵 파랑</td></tr>
+                <tr><td>4</td><td>🟢 초록</td></tr>
+                <tr><td>3</td><td>🟡 노랑</td></tr>
+                <tr><td>2</td><td>🟠 주황</td></tr>
+                <tr><td>1</td><td>🔴 빨강</td></tr>
+                <tr><td>0</td><td>⬜ 흰색 (완료!)</td></tr>
+            </tbody>
+        </table>
+
+        <ul>
+            <li><strong>HP 0인 면을 다시 맞추면</strong> HP가 1로 복원됩니다 (빨간색으로 되돌아감). 주의하세요!</li>
+            <li><strong>링크된 면</strong>이 있는 경우, 한 면을 맞추면 연결된 면들도 함께 변경됩니다.</li>
+        </ul>
+
+        <h3>충돌 판정</h3>
+        <ul>
+            <li>총알은 면의 <strong>바깥쪽에서 안쪽으로</strong> 충돌할 때만 유효합니다.</li>
+            <li>도형 내부에서 밖으로 통과하는 총알은 무시됩니다.</li>
+        </ul>
+
+        <hr>
+
+        <h2>회전 패턴</h2>
+        <p>스테이지가 진행될수록 도형의 회전 난이도가 올라갑니다.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>패턴</th>
+                    <th>설명</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Static</strong></td>
+                    <td>회전 없음 (튜토리얼용)</td>
+                </tr>
+                <tr>
+                    <td><strong>SingleAxis</strong></td>
+                    <td>X, Y, Z 중 하나의 축으로 고정 회전</td>
+                </tr>
+                <tr>
+                    <td><strong>MultiAxis</strong></td>
+                    <td>랜덤 조합 축으로 고정 회전</td>
+                </tr>
+                <tr>
+                    <td><strong>ReactiveAxis</strong></td>
+                    <td>MultiAxis 기반이지만, <strong>총알이 맞을 때마다 회전 축이 바뀜</strong></td>
+                </tr>
+                <tr>
+                    <td><strong>Random</strong></td>
+                    <td>2~5초마다 랜덤 축으로 자동 변경</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h2>UI 안내</h2>
+
+        <h3>플레이 중 표시 정보</h3>
+        <ul>
+            <li><strong>Stage</strong> — 현재 스테이지 번호</li>
+            <li><strong>시간</strong> — 현재 스테이지 경과 시간 (실시간 갱신)</li>
+            <li><strong>탄환</strong> — 현재 스테이지에서 발사한 총알 수</li>
+        </ul>
+
+        <h3>기록 표시</h3>
+        <ul>
+            <li><strong>최고 시간</strong> — 해당 스테이지의 최단 클리어 시간</li>
+            <li><strong>최소 탄환</strong> — 해당 스테이지의 최소 발사 횟수</li>
+        </ul>
+
+        <div class="alert">
+            💡 <strong>참고</strong>
+            기록은 자동으로 저장되며, 더 빠른 시간으로 클리어하면 갱신됩니다.
+        </div>
+
+        <hr>
+
+        <h2>공략 팁</h2>
+        <ol>
+            <li><strong>면 위치 파악이 우선</strong> — 발사 전 도형을 관찰하여 남은 면의 위치를 확인하세요.</li>
+            <li><strong>HP 0인 면 주의</strong> — 이미 흰색인 면을 맞추면 HP가 복원됩니다. 정확히 조준하세요.</li>
+            <li><strong>가속 이동 활용</strong> — <code>Shift</code>로 빠르게 이동하여 최적의 위치를 선점하세요.</li>
+        </ol>
+    </div>
+</body>
+</html>

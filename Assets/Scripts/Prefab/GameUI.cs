@@ -56,7 +56,6 @@ namespace ShapeShooter
             countdownText.alignment = TextAlignmentOptions.Center;
             countdownText.color = Color.yellow;
             countdownText.fontStyle = FontStyles.Bold;
-            countdownText.enableWordWrapping = false;
             countdownText.enableAutoSizing = true;
             countdownText.fontSizeMin = 30;
             countdownText.fontSizeMax = 80;

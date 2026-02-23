@@ -62,7 +62,7 @@ namespace ShapeShooter
 
                 // 내적 > 0: 총알이 안쪽→바깥 방향으로 이동 중 (뒤쪽 충돌) → 무시
                 float dot = Vector3.Dot(faceOutward, transform.forward);
-                if (0f < dot)
+                if (0.2f < dot)
                     return;
 
                 face.OnHit(transform.position);

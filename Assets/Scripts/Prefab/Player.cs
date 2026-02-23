@@ -25,8 +25,8 @@ namespace ShapeShooter
         {
             playerCamera = GetComponentInChildren<Camera>();
 
-            // 이동 입력: WASD, 방향키
-            moveAction = new("Move");
+            // 이동 입력: WASD, 방향키, 게임패드 좌스틱
+            moveAction = new("Move", binding: "<Gamepad>/leftStick");
             moveAction.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
                 .With("Down", "<Keyboard>/s")
@@ -138,17 +138,7 @@ namespace ShapeShooter
             if (null == firePoint)
                 return;
 
-            // 마우스 스크린 좌표 → 월드 레이 생성
-            var ray = playerCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
-            Vector3 targetPoint;
-
-            // 레이가 오브젝트에 맞으면 히트 지점, 아니면 레이 방향 기준 원거리 지점 사용
-            if (Physics.Raycast(ray, out var hit))
-                targetPoint = hit.point;
-            else
-                targetPoint = ray.GetPoint(100f);
-
-            var direction    = (targetPoint - firePoint.position).normalized;
+            var direction = (Vector3.zero - firePoint.position).normalized;
             var lookRotation = Quaternion.LookRotation(direction);
 
             if (null != BulletManager.Instance)

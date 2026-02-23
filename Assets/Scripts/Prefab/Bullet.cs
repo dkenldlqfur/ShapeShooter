@@ -60,10 +60,9 @@ namespace ShapeShooter
                 Vector3 shapeCenter = face.transform.root.position;
                 Vector3 faceOutward = (face.transform.position - shapeCenter).normalized;
 
-                // 내적 > 0.2: 총알이 완전한 뒷면에서 진입하는 경우만 무시
-                // 마우스 방향 발사 시 비스듬한 각도도 유효 충돌로 인정
+                // 내적 > 0: 총알이 안쪽→바깥 방향으로 이동 중 (뒤쪽 충돌) → 무시
                 float dot = Vector3.Dot(faceOutward, transform.forward);
-                if (0.2f < dot)
+                if (0f < dot)
                     return;
 
                 face.OnHit(transform.position);

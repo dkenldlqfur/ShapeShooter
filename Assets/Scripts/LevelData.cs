@@ -18,7 +18,7 @@ namespace ShapeShooter
         public RotationPatternType rotationPattern;
 
         [Header("면 체력")]
-        [Tooltip("면의 초기 HP (맞출 때마다 1 감소, 0이 되면 흰색으로 완료)")]
+        [Tooltip("면의 초기 HP (총알에 맞을 때마다 1 감소, 0이 되면 원래 색상으로 복구)")]
         public int requiredHitsPerFace = 1;
     }
 

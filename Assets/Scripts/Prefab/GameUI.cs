@@ -120,16 +120,18 @@ namespace ShapeShooter
 
             if (null != recordTimeText)
             {
-                recordTimeText.text = record.hasRecord
-                    ? $"최고 시간: {record.clearTime:F2}초"
-                    : "최고 시간: --";
+                if (record.hasRecord)
+                    recordTimeText.text = $"최고 시간: {record.clearTime:F2}초";
+                else
+                    recordTimeText.text = "최고 시간: --";
             }
 
             if (null != recordShotsText)
             {
-                recordShotsText.text = record.hasRecord
-                    ? $"최소 탄환: {record.shotCount}발"
-                    : "최소 탄환: --";
+                if (record.hasRecord)
+                    recordShotsText.text = $"최소 탄환: {record.shotCount}발";
+                else
+                    recordShotsText.text = "최소 탄환: --";
             }
         }
 
@@ -150,7 +152,7 @@ namespace ShapeShooter
         /// </summary>
         private async UniTaskVoid UpdateUILoop()
         {
-            while (this != null)
+            while (null != this)
             {
                 if (null != GameManager.Instance && GameManager.Instance.IsGameActive)
                 {

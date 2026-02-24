@@ -24,7 +24,7 @@ namespace ShapeShooter
         private static GameManager instance;
         private static bool applicationIsQuitting = false;
 
-        public static bool HasInstance => instance != null;
+        public static bool HasInstance => null != instance;
 
         public static GameManager Instance
         {

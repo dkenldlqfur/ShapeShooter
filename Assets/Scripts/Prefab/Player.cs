@@ -5,7 +5,7 @@ using static UnityEngine.InputSystem.InputAction;
 namespace ShapeShooter
 {
     /// <summary>
-    /// 플레이어 조작. 원점 중심 구면 이동, 원점 방향 총알 발사
+    /// 플레이어 조작 관리. 원점을 중심으로 구면 궤도를 회전 이동하며, 마우스가 위치한 곳(혹은 전방)으로 총알을 발사합니다.
     /// </summary>
     public class Player : MonoBehaviour
     {
@@ -96,7 +96,9 @@ namespace ShapeShooter
             // 위치 벡터 × 이동 방향 = 회전축
             var axis = Vector3.Cross(transform.position, moveDir).normalized;
 
-            float speedMultiplier = boostAction.IsPressed() ? boostRate : 1.0f;
+            float speedMultiplier = 1.0f;
+            if (boostAction.IsPressed())
+                speedMultiplier = boostRate;
             float angle = orbitSpeed * speedMultiplier * Time.deltaTime;
             var rotation = Quaternion.AngleAxis(angle, axis);
 
@@ -128,7 +130,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 발사 입력 시 firePoint에서 원점 방향으로 총알 생성
+        /// 발사 입력 시 화면(스크린 좌표)으로 Raycast를 쏘아 타겟을 조준하고 총알을 생성합니다.
         /// </summary>
         private void OnFire(CallbackContext context)
         {

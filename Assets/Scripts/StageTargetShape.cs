@@ -1,25 +1,25 @@
-using Cysharp.Threading.Tasks;
+﻿using Cysharp.Threading.Tasks;
 using System.Threading;
 using UnityEngine;
 
 namespace ShapeShooter
 {
     /// <summary>
-    /// 도형 관리. 면 초기화, 완료 카운트 추적, 회전 패턴 제어, 스테이지 클리어 판정
+    /// 타겟 도형 관리자. (단일) 메쉬 하위 PolygonColorManager 자동 부착 및 초기화, 타격 완료 카운트 추적, 회전 패턴 제어, 스테이지 클리어 처리를 담당합니다.
     /// </summary>
-    public class ShapeManager : MonoBehaviour
+    public class StageTargetShape : MonoBehaviour
     {
         /// <summary>SingleAxis에서 선택 가능한 기본 축 (X, Y, Z)</summary>
         private static readonly Vector3[] CARDINAL_AXES = { Vector3.right, Vector3.up, Vector3.forward };
 
-        private ShapeFace[] faces;
+        private PolygonColorManager[] polygonManagers;
         private LevelData currentLevelData;
         private CancellationTokenSource cts;
         private bool isRotating = false;
         private int totalFaces;
         private int completedFaces;
 
-        /// <summary>ReactiveAxis 패턴 전용: 총알 충돌 시 동적으로 변경되는 회전 축</summary>
+        /// <summary>ReactiveAxis 패턴 전용: 총알 충돌 시 무작위로 변경되는 회전 축</summary>
         private Vector3 reactiveAxis;
 
         private void Start()
@@ -28,56 +28,42 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 하위 면 검색, 이벤트 구독, 링크 서브 면 제외 카운트 계산, 회전 시작
+        /// 하위 폴리곤 매니저 검색 및 이벤트 구독, 기하학적 전체 면 갯수 합산, 회전 시작
         /// </summary>
         public void Initialize()
         {
-            faces = GetComponentsInChildren<ShapeFace>();
+            // 하위에 MeshFilter는 있지만 PolygonColorManager가 없는 경우 자동 부착 (단일 메쉬 분할용)?
+            var filters = GetComponentsInChildren<MeshFilter>();
+            foreach (var filter in filters)
+            {
+                if (null != filter.GetComponent<MeshCollider>() && null == filter.GetComponent<PolygonColorManager>())
+                {
+                    filter.gameObject.AddComponent<PolygonColorManager>();
+                }
+            }
+
+            polygonManagers = GetComponentsInChildren<PolygonColorManager>();
             
-            if (null == faces || 0 == faces.Length)
+            if (null == polygonManagers || 0 == polygonManagers.Length)
                 return;
 
             completedFaces = 0;
+            totalFaces = 0;
 
             if (null != GameManager.Instance)
                 currentLevelData = GameManager.Instance.GetCurrentLevelData();
 
-            // 링크된 서브 면은 완료 카운트에서 제외 (대표 면만 카운트)
-            int linkedSubFaceCount = 0;
-            foreach (var face in faces)
+            foreach (var pm in polygonManagers)
             {
-                face.Initialize(currentLevelData);
-                face.OnFaceCompleted += HandleFaceCompleted;
-                face.OnFaceRestored += HandleFaceRestored;
-                face.OnFaceHit += HandleFaceHit;
+                pm.Initialize(currentLevelData);
+                pm.OnFaceCompleted += HandleFaceCompleted;
+                pm.OnFaceRestored += HandleFaceRestored;
+                pm.OnFaceHit += HandleFaceHit;
 
-                if (IsLinkedSubFace(face))
-                    linkedSubFaceCount++;
+                totalFaces += pm.TotalFaces;
             }
-
-            totalFaces = faces.Length - linkedSubFaceCount;
 
             StartRotation();
-        }
-
-        /// <summary>
-        /// 해당 면이 다른 면의 linkedFaces에 포함된 서브 면인지 확인
-        /// </summary>
-        private bool IsLinkedSubFace(ShapeFace target)
-        {
-            foreach (var face in faces)
-            {
-                if (face == target || !face.HasLinkedFaces)
-                    continue;
-
-                foreach (var linked in face.LinkedFaces)
-                {
-                    if (linked == target)
-                        return true;
-                }
-            }
-
-            return false;
         }
 
         #region 면 이벤트 핸들러
@@ -95,18 +81,18 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 면 히트 시 호출. ReactiveAxis 패턴이면 회전 축을 새로 생성
+        /// 피격 이벤트 호출 시, ReactiveAxis 패턴이면 회전 축을 무작위로 새로 생성
         /// </summary>
         private void HandleFaceHit()
         {
-            if (null != currentLevelData && currentLevelData.rotationPattern == RotationPatternType.ReactiveAxis)
+            if (null != currentLevelData && RotationPatternType.ReactiveAxis == currentLevelData.rotationPattern)
                 reactiveAxis = new Vector3(Random.value, Random.value, Random.value).normalized;
         }
 
         #endregion
 
         /// <summary>
-        /// 모든 면이 완료되었으면 스테이지 클리어 처리
+        /// 모든 면의 색상 변환이 완료되었으면 스테이지 클리어 처리
         /// </summary>
         private void CheckCompletion()
         {
@@ -124,13 +110,16 @@ namespace ShapeShooter
         
         private void OnDestroy()
         {
-            foreach (var face in faces)
+            if (null != polygonManagers)
             {
-                if (null != face)
+                foreach (var pm in polygonManagers)
                 {
-                    face.OnFaceCompleted -= HandleFaceCompleted;
-                    face.OnFaceRestored -= HandleFaceRestored;
-                    face.OnFaceHit -= HandleFaceHit;
+                    if (null != pm)
+                    {
+                        pm.OnFaceCompleted -= HandleFaceCompleted;
+                        pm.OnFaceRestored -= HandleFaceRestored;
+                        pm.OnFaceHit -= HandleFaceHit;
+                    }
                 }
             }
 
@@ -142,7 +131,7 @@ namespace ShapeShooter
         #region 회전 제어
 
         /// <summary>
-        /// 레벨 데이터의 패턴에 따라 회전 축을 생성하고 회전 루프 시작
+        /// 레벨 데이터의 패턴에 따라 최초 회전 축을 생성하고 회전 루프 코루틴(UniTask) 시작
         /// </summary>
         private void StartRotation()
         {
@@ -151,8 +140,8 @@ namespace ShapeShooter
 
             var axis = GenerateRotationAxis(currentLevelData.rotationPattern);
 
-            // ReactiveAxis는 히트 시 변경되는 필드 기반이므로 초기값 설정
-            if (currentLevelData.rotationPattern == RotationPatternType.ReactiveAxis)
+            // ReactiveAxis 패턴일 때만 충돌 전까지 사용할 초기 축 설정?정
+            if (RotationPatternType.ReactiveAxis == currentLevelData.rotationPattern)
                 reactiveAxis = axis;
 
             isRotating = true;
@@ -168,7 +157,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 회전 패턴에 따라 회전 축 벡터를 생성
+        /// 주어진 회전 패턴에 따라 3D 공간 상의 회전 방향 벡터 생성
         /// </summary>
         private Vector3 GenerateRotationAxis(RotationPatternType pattern)
         {
@@ -182,7 +171,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 즉시 회전 정지
+        /// 회전 즉시 멈춤
         /// </summary>
         public void StopRotation()
         {
@@ -191,7 +180,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 2초에 걸쳐 점진적으로 감속 정지 (스테이지 클리어 연출)
+        /// 스테이지 클리어 시 2초에 걸쳐 점진적으로 회전 속도를 0으로 감속
         /// </summary>
         private async UniTask StopRotationGradually()
         {
@@ -202,7 +191,9 @@ namespace ShapeShooter
 
             float duration = 2.0f;
             float elapsed = 0f;
-            float startSpeed = null != currentLevelData ? currentLevelData.rotationSpeed : 10f;
+            float startSpeed = 10f;
+            if (null != currentLevelData)
+                startSpeed = currentLevelData.rotationSpeed;
 
             while (elapsed < duration)
             {
@@ -214,7 +205,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 패턴별 회전 로직을 매 프레임 실행하는 메인 루프
+        /// 패턴별 회전 로직을 프레임마다 대기하며 비동기로 실행하는 메인 루프
         /// </summary>
         private async UniTaskVoid RotateLoop(Vector3 axis, CancellationToken token)
         {
@@ -248,7 +239,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 고정 축 기반 회전 (SingleAxis, MultiAxis, ReactiveAxis 공용)
+        /// 고정 축 기반 회전 (SingleAxis, MultiAxis, ReactiveAxis 공통 사용)
         /// </summary>
         private void RotateFixedAxis(Vector3 axis)
         {
@@ -256,7 +247,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 랜덤 축으로 일정 시간(2~5초) 회전 후 새 축으로 전환
+        /// 무작위 축 방향으로 2~5초간 회전 후, 시간 만료 시 새로운 무작위 축으로 전환하는 패턴
         /// </summary>
         private async UniTask RotateRandom(CancellationToken token)
         {

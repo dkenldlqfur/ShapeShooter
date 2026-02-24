@@ -6,7 +6,8 @@ using UnityEngine;
 namespace ShapeShooter
 {
     /// <summary>
-    /// 총알 동작 관리. 전방 직선 이동, 면 충돌 판정, 오브젝트 풀 반환 처리
+    /// 총알 동작 관리. Raycast 연속 충돌 판정 체계(Continuous Collision Detection) 기반의 표면 
+    /// 타격 위치 계산 및 오브젝트 풀 반환 처리를 수행합니다.
     /// </summary>
     public class Bullet : MonoBehaviour
     {
@@ -46,29 +47,24 @@ namespace ShapeShooter
 
         private void Update()
         {
-            transform.Translate(speed * Time.deltaTime * Vector3.forward);
-        }
-
-        private void OnTriggerEnter(Collider other)
-        {
             if (isReturning)
                 return;
 
-            if (other.TryGetComponent<ShapeFace>(out var face))
+            float moveDistance = speed * Time.deltaTime;
+            
+            // 앞으로 이동할 거리만큼 미리 Raycast를 쏘아 연속 충돌(관통 방지)을 검사합니다.
+            if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, moveDistance))
             {
-                // 면의 바깥쪽 법선: 도형 중심(루트) → 면 위치 방향
-                Vector3 shapeCenter = face.transform.root.position;
-                Vector3 faceOutward = (face.transform.position - shapeCenter).normalized;
+                var polygonManager = hit.collider.GetComponentInParent<PolygonColorManager>();
+                if (null != polygonManager)
+                    polygonManager.OnHitAccurate(hit.point, hit.normal, transform.forward);
 
-                // 내적 > 0: 총알이 안쪽→바깥 방향으로 이동 중 (뒤쪽 충돌) → 무시
-                float dot = Vector3.Dot(faceOutward, transform.forward);
-                if (0.2f < dot)
-                    return;
-
-                face.OnHit(transform.position);
+                transform.position = hit.point; // 표면까지만 이동시킨 뒤 즉각 반환
+                ReturnToPool();
+                return;
             }
 
-            ReturnToPool();
+            transform.Translate(moveDistance * Vector3.forward);
         }
 
         /// <summary>

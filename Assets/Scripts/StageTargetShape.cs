@@ -149,7 +149,7 @@ namespace ShapeShooter
                 cts.Cancel();
                 cts.Dispose();
             }
-            cts = new();
+            cts = new CancellationTokenSource();
 
             RotateLoop(axis, cts.Token).Forget();
         }
@@ -185,7 +185,7 @@ namespace ShapeShooter
             isRotating = false;
             cts?.Cancel();
             cts?.Dispose();
-            cts = new();
+            cts = new CancellationTokenSource();
 
             float duration = 2.0f;
             float elapsed = 0f;

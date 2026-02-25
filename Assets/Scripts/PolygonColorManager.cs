@@ -16,8 +16,8 @@ namespace ShapeShooter
     }
 
     /// <summary>
-    /// 단일 원본 메쉬를 면(Face) 단위로 분할하여 독립적인 정점/색상을 갖도록 재구성합니다.
-    /// 분할된 다각형들을 평면(법선과 오프셋 기준) 단위로 그룹화하고, Raycast 타격 지점 기반의 정밀한 충돌 색상 변경 체계를 관리합니다.
+    /// 단일 원본 메쉬를 폴리곤(삼각형) 단위로 분할하여 독립적인 정점/색상을 갖도록 재구성합니다.
+    /// 각 폴리곤을 독립 그룹으로 관리하며, Raycast 타격 지점 기반의 충돌 색상 변경 체계를 담당합니다.
     /// </summary>
     public class PolygonColorManager : MonoBehaviour
     {
@@ -57,20 +57,31 @@ namespace ShapeShooter
 
         private int maxHP = 1;
 
-        private class FaceGroup
+        /// <summary>
+        /// 개별 폴리곤(삼각형) 단위의 색상/HP 관리 그룹
+        /// </summary>
+        private class PolygonGroup
         {
             public int currentHP;
             public int maxHP;
             public bool isCompleted;
-            public List<int> vertexIndices = new(); // 각 다각형의 정점 인덱스 저장
-            public Vector3 normal;
-            public float offset;
+            public int vertexBase; // 해당 삼각형의 첫 번째 정점 인덱스 (vertexBase, +1, +2)
             public Color originalColor;
         }
 
-        private List<FaceGroup> faceGroups = new();
+        private PolygonGroup[] polygonGroups;
 
-        public int TotalFaces => faceGroups.Count;
+        public int TotalFaces 
+        {
+            get
+            {
+                if (null != polygonGroups)
+                {
+                    return polygonGroups.Length;
+                }
+                return 0;
+            }
+        }
         public int CompletedFaces { get; private set; }
 
         public void Initialize(LevelData levelData)
@@ -84,20 +95,29 @@ namespace ShapeShooter
             meshFilter = GetComponent<MeshFilter>();
             meshRenderer = GetComponent<MeshRenderer>();
 
-            if (null != meshCollider && null == meshCollider.sharedMesh && null != meshFilter)
-                meshCollider.sharedMesh = meshFilter.sharedMesh;
-
-            if (null == meshCollider || null == meshCollider.sharedMesh)
+            if (null == meshFilter || null == meshFilter.sharedMesh)
                 return;
 
             CreateIndependentPolygons();
-            GroupFaces();
+
+            // 분리된 메쉬를 MeshCollider에 할당하여 triangleIndex가 polygonGroups 인덱스와 일치하도록 보장
+            if (null != meshCollider)
+                meshCollider.sharedMesh = separatedMesh;
+
+            BuildPolygonGroups();
             UpdateAllColors();
         }
 
         private void CreateIndependentPolygons()
         {
-            Mesh originalMesh = meshCollider.sharedMesh;
+            Mesh originalMesh = meshFilter.sharedMesh;
+            if (null != meshCollider)
+            {
+                if (null != meshCollider.sharedMesh)
+                {
+                    originalMesh = meshCollider.sharedMesh;
+                }
+            }
             int[] origTris = originalMesh.triangles;
             Vector3[] origVerts = originalMesh.vertices;
             Vector3[] origNorms = originalMesh.normals;
@@ -128,7 +148,7 @@ namespace ShapeShooter
                 newTris[i] = i;
             }
 
-            separatedMesh = new()
+            separatedMesh = new Mesh()
             {
                 indexFormat = UnityEngine.Rendering.IndexFormat.UInt32,
                 vertices = vertices,
@@ -144,186 +164,197 @@ namespace ShapeShooter
             meshRenderer.material = mat;
         }
 
-        private void GroupFaces()
+        /// <summary>
+        /// 각 삼각형을 독립 폴리곤 그룹으로 초기화합니다. (면 그룹핑 없음)
+        /// </summary>
+        private void BuildPolygonGroups()
         {
-            faceGroups.Clear();
+            int triCount = vertices.Length / 3;
+            polygonGroups = new PolygonGroup[triCount];
 
-            for (int i = 0; i < normals.Length; i += 3)
+            for (int t = 0; t < triCount; t++)
             {
-                Vector3 normal = normals[i];
-                Vector3 point = vertices[i];
-                float offset = Vector3.Dot(normal, point);
-
-                FaceGroup targetGroup = null;
-
-                foreach (var group in faceGroups)
+                int baseIdx = t * 3;
+                polygonGroups[t] = new PolygonGroup()
                 {
-                    if (Vector3.Angle(group.normal, normal) < 1.0f && Mathf.Abs(group.offset - offset) < 0.001f)
-                    {
-                        targetGroup = group;
-                        break;
-                    }
-                }
-
-                if (null == targetGroup)
-                {
-                    targetGroup = new()
-                    {
-                        maxHP = this.maxHP,
-                        currentHP = this.maxHP,
-                        isCompleted = false,
-                        normal = normal,
-                        offset = offset,
-                        originalColor = colors[i]
-                    };
-                    faceGroups.Add(targetGroup);
-                }
-
-                targetGroup.vertexIndices.Add(i);
-                targetGroup.vertexIndices.Add(i + 1);
-                targetGroup.vertexIndices.Add(i + 2);
+                    maxHP = this.maxHP,
+                    currentHP = this.maxHP,
+                    isCompleted = false,
+                    vertexBase = baseIdx,
+                    originalColor = colors[baseIdx]
+                };
             }
         }
 
         private void UpdateAllColors()
         {
-            foreach (var group in faceGroups)
+            foreach (var group in polygonGroups)
             {
-                Color faceColor = group.originalColor;
+                Color polygonColor = group.originalColor;
                 if (0 != group.currentHP)
-                    faceColor = GetColorByHP(group.currentHP);
-                foreach (int vIndex in group.vertexIndices)
-                {
-                    colors[vIndex] = faceColor;
-                }
+                    polygonColor = GetColorByHP(group.currentHP);
+
+                colors[group.vertexBase] = polygonColor;
+                colors[group.vertexBase + 1] = polygonColor;
+                colors[group.vertexBase + 2] = polygonColor;
             }
             separatedMesh.colors = colors;
         }
 
-        private int FindClosestTriangleIndex(Vector3 hitPointWorld)
+        /// <summary>
+        /// Möller–Trumbore ray-triangle intersection algorithm
+        /// Returns true if the ray intersects the triangle, and outputs the distance t
+        /// </summary>
+        private bool IntersectRayTriangle(Vector3 rayOrigin, Vector3 rayDir, Vector3 v0, Vector3 v1, Vector3 v2, out float t)
         {
-            Vector3 localHitPoint = transform.InverseTransformPoint(hitPointWorld);
-            int closestTriangle = -1;
-            float minSqrDistance = float.MaxValue;      
-            int triangleCount = vertices.Length / 3;    
+            t = 0f;
+            const float EPSILON = 0.0000001f;
+            Vector3 edge1 = v1 - v0;
+            Vector3 edge2 = v2 - v0;
+            Vector3 h = Vector3.Cross(rayDir, edge2);
+            float a = Vector3.Dot(edge1, h);
 
-            for (int i = 0; i < triangleCount; i++)     
+            if (a > -EPSILON && a < EPSILON)
+                return false; // Ray is parallel to this triangle.
+
+            float f = 1.0f / a;
+            Vector3 s = rayOrigin - v0;
+            float u = f * Vector3.Dot(s, h);
+
+            if (u < 0.0f || u > 1.0f)
+                return false;
+
+            Vector3 q = Vector3.Cross(s, edge1);
+            float v = f * Vector3.Dot(rayDir, q);
+
+            if (v < 0.0f || u + v > 1.0f)
+                return false;
+
+            t = f * Vector3.Dot(edge2, q);
+            return t > EPSILON;
+        }
+
+        private int FindHitTriangleByRaycast(Vector3 hitPointWorld, Vector3 rayForwardWorld)
+        {
+            // 발사체의 궤적을 로컬 공간 선분(Ray)으로 변환
+            // 충돌 지점에서 약간 뒤에서 출발하는 Ray 생성
+            Vector3 originWorld = hitPointWorld - rayForwardWorld * 2.0f;
+            Vector3 localOrigin = transform.InverseTransformPoint(originWorld);
+            Vector3 localDir = transform.InverseTransformDirection(rayForwardWorld).normalized;
+
+            int bestTriangle = -1;
+            float closestT = float.MaxValue;
+            int triangleCount = vertices.Length / 3;
+
+            for (int i = 0; i < triangleCount; i++)
             {
-                int v1 = i * 3;
-                int v2 = i * 3 + 1;
-                int v3 = i * 3 + 2;
+                int vIdx = i * 3;
+                Vector3 v0 = vertices[vIdx];
+                Vector3 v1 = vertices[vIdx + 1];
+                Vector3 v2 = vertices[vIdx + 2];
 
-                float dist1 = (vertices[v1] - localHitPoint).sqrMagnitude;
-                float dist2 = (vertices[v2] - localHitPoint).sqrMagnitude;
-                float dist3 = (vertices[v3] - localHitPoint).sqrMagnitude;
-
-                float minVertexDist = Mathf.Min(dist1, Mathf.Min(dist2, dist3));
-
-                if (minVertexDist < minSqrDistance)     
+                if (IntersectRayTriangle(localOrigin, localDir, v0, v1, v2, out float t))
                 {
-                    minSqrDistance = minVertexDist;     
-                    closestTriangle = i;
+                    if (t < closestT)
+                    {
+                        closestT = t;
+                        bestTriangle = i;
+                    }
                 }
             }
-            return closestTriangle;
+
+            // 레이캐스트가 실패한 경우, 거리를 이용한 최후의 보루 (기존 방식 개선: 폴리곤 중심점 거리 비교)
+            if (-1 == bestTriangle)
+            {
+                Vector3 localHit = transform.InverseTransformPoint(hitPointWorld);
+                float minCenterDist = float.MaxValue;
+                for (int i = 0; i < triangleCount; i++)
+                {
+                    int vIdx = i * 3;
+                    Vector3 center = (vertices[vIdx] + vertices[vIdx + 1] + vertices[vIdx + 2]) / 3f;
+                    float dist = (center - localHit).sqrMagnitude;
+                    if (dist < minCenterDist)
+                    {
+                        minCenterDist = dist;
+                        bestTriangle = i;
+                    }
+                }
+            }
+
+            return bestTriangle;
         }
 
         /// <summary>
-        /// Raycast의 정확한 법선(Normal)과 충돌 좌표(Point)를 기반으로 타격할 면 그룹을 즉시 결정합니다.
+        /// Raycast의 triangleIndex를 사용하여 정확히 맞힌 폴리곤의 색상을 변경합니다.
         /// </summary>
-        public void OnHitAccurate(Vector3 hitPointWorld, Vector3 hitNormalWorld, Vector3 bulletForward)
+        public void OnHitAccurate(Vector3 hitPointWorld, Vector3 hitNormalWorld, Vector3 bulletForward, int colliderTriangleIndex)
         {
             // 뒷면 타격 무시 (내적 > 0 이면 안쪽에서 바깥쪽으로 향하는 경우)
             if (0.2f < Vector3.Dot(hitNormalWorld, bulletForward))
                 return;
 
-            Vector3 localHitPoint = transform.InverseTransformPoint(hitPointWorld);
-            Vector3 localHitNormal = transform.InverseTransformDirection(hitNormalWorld).normalized;
-            float hitOffset = Vector3.Dot(localHitNormal, localHitPoint);
-
-            FaceGroup hitGroup = null;
-
-            foreach (var group in faceGroups)
-            {
-                // 법선 방향이 일치하고, 평면 오프셋이 일치하는 그룹을 찾습니다.
-                if (Vector3.Angle(group.normal, localHitNormal) < 1.0f && Mathf.Abs(group.offset - hitOffset) < 0.001f)
-                {
-                    hitGroup = group;
-                    break;
-                }
-            }
-
-            if (null == hitGroup)
+            if (null == polygonGroups || 0 == polygonGroups.Length)
                 return;
 
+            int triIndex = colliderTriangleIndex;
+            string method = "Raycast TriangleIndex";
+            
+            if (-1 == triIndex || triIndex >= polygonGroups.Length)
+            {
+                triIndex = FindHitTriangleByRaycast(hitPointWorld, bulletForward);
+                method = "Ray-Triangle Fallback";
+            }
+
+            if (-1 == triIndex)
+                return;
+
+
             OnFaceHit?.Invoke();
-            ApplyHitToFaceGroup(hitGroup);
+            ApplyHitToPolygon(polygonGroups[triIndex]);
         }
 
         /// <summary>
-        /// (구버전 하위 호환) 가장 가까운 정점을 통해 타격 면을 판별하고 HP를 깎습니다.
+        /// (구버전 하위 호환) 가장 가까운 정점을 통해 타격 폴리곤을 판별하고 HP를 깎습니다.
         /// </summary>
         public void OnHit(Vector3 hitPointWorld, Vector3 bulletForward)
         {
-            int triIndex = FindClosestTriangleIndex(hitPointWorld);
+            int triIndex = FindHitTriangleByRaycast(hitPointWorld, bulletForward);
             if (-1 == triIndex)
                 return;
 
             Vector3 hitNormalLocal = normals[triIndex * 3];
             Vector3 worldNormal = transform.TransformDirection(hitNormalLocal);
 
-            // ?면 ??무시 (?적 > 0 ?면 ?쪽?서 바깥쪽으??하??경우)
+            // 뒷면 타격 무시 (내적 > 0 이면 안쪽에서 바깥쪽으로 향하는 경우)
             if (0.2f < Vector3.Dot(worldNormal, bulletForward))
                 return;
 
             OnFaceHit?.Invoke();
-            ApplyHitToFace(triIndex);
+            ApplyHitToPolygon(polygonGroups[triIndex]);
         }
 
-        private void ApplyHitToFace(int triIndex)
+        private void ApplyHitToPolygon(PolygonGroup group)
         {
-            Vector3 hitNormal = normals[triIndex * 3];
-            Vector3 hitPointLocal = vertices[triIndex * 3];
-            float hitOffset = Vector3.Dot(hitNormal, hitPointLocal);
+            bool wasCompleted = group.isCompleted;
 
-            FaceGroup hitGroup = null;
-
-            foreach (var group in faceGroups)
+            if (0 == group.currentHP)
             {
-                if (Vector3.Angle(group.normal, hitNormal) < 1.0f && Mathf.Abs(group.offset - hitOffset) < 0.001f)
-                {
-                    hitGroup = group;
-                    break;
-                }
-            }
-
-            if (null == hitGroup)
-                return;
-
-            ApplyHitToFaceGroup(hitGroup);
-        }
-
-        private void ApplyHitToFaceGroup(FaceGroup hitGroup)
-        {
-            bool wasCompleted = hitGroup.isCompleted;
-
-            if (0 == hitGroup.currentHP)
-            {
-                hitGroup.currentHP = 1;
-                hitGroup.isCompleted = false;
+                group.currentHP = 1;
+                group.isCompleted = false;
             }
             else
             {
-                hitGroup.currentHP--;
+                group.currentHP--;
             }
 
-            Color newColor = hitGroup.originalColor;
-            if (0 != hitGroup.currentHP)
-                newColor = GetColorByHP(hitGroup.currentHP);
-            foreach (int vIndex in hitGroup.vertexIndices)
-            {
-                colors[vIndex] = newColor;
-            }
+            Color newColor = group.originalColor;
+            if (0 != group.currentHP)
+                newColor = GetColorByHP(group.currentHP);
+
+            colors[group.vertexBase] = newColor;
+            colors[group.vertexBase + 1] = newColor;
+            colors[group.vertexBase + 2] = newColor;
+
             separatedMesh.colors = colors;
 
             if (wasCompleted)
@@ -331,9 +362,9 @@ namespace ShapeShooter
                 CompletedFaces--;
                 OnFaceRestored?.Invoke();
             }
-            else if (0 == hitGroup.currentHP)
+            else if (0 == group.currentHP)
             {
-                hitGroup.isCompleted = true;
+                group.isCompleted = true;
                 CompletedFaces++;
                 OnFaceCompleted?.Invoke();
             }

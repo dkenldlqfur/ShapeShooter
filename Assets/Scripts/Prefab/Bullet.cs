@@ -57,7 +57,7 @@ namespace ShapeShooter
             {
                 var polygonManager = hit.collider.GetComponentInParent<PolygonColorManager>();
                 if (null != polygonManager)
-                    polygonManager.OnHitAccurate(hit.point, hit.normal, transform.forward);
+                    polygonManager.OnHitAccurate(hit.point, hit.normal, transform.forward, hit.triangleIndex);
 
                 transform.position = hit.point; // 표면까지만 이동시킨 뒤 즉각 반환
                 ReturnToPool();

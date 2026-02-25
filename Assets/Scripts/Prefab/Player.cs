@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using static UnityEngine.InputSystem.InputAction;
 
 namespace ShapeShooter
 {
@@ -25,24 +24,12 @@ namespace ShapeShooter
         {
             playerCamera = GetComponentInChildren<Camera>();
 
-            // 이동 입력: WASD, 방향키, 게임패드 좌스틱
-            moveAction = new("Move");
-            moveAction.AddCompositeBinding("2DVector")
-                .With("Up", "<Keyboard>/w")
-                .With("Down", "<Keyboard>/s")
-                .With("Left", "<Keyboard>/a")
-                .With("Right", "<Keyboard>/d")
-                .With("Up", "<Keyboard>/upArrow")
-                .With("Down", "<Keyboard>/downArrow")
-                .With("Left", "<Keyboard>/leftArrow")
-                .With("Right", "<Keyboard>/rightArrow");
-
-            // 발사 입력: Space, 마우스 좌클릭
-            fireAction = new InputAction("Fire", binding: "<Keyboard>/space");
-            fireAction.AddBinding("<Mouse>/leftButton");
-
-            // 가속 입력: Left Shift
-            boostAction = new InputAction("Sprint", binding: "<Keyboard>/leftShift");
+            var inputAsset = Resources.Load<InputActionAsset>("InputSystem_Actions");
+            var playerMap = inputAsset.FindActionMap("Player");
+            
+            moveAction = playerMap.FindAction("Move");
+            fireAction = playerMap.FindAction("Attack");
+            boostAction = playerMap.FindAction("Sprint");
 
             initialPosition = transform.position;
             initialRotation = transform.rotation;
@@ -132,7 +119,7 @@ namespace ShapeShooter
         /// <summary>
         /// 발사 입력 시 화면(스크린 좌표)으로 Raycast를 쏘아 타겟을 조준하고 총알을 생성합니다.
         /// </summary>
-        private void OnFire(CallbackContext context)
+        private void OnFire(InputAction.CallbackContext context)
         {
             if (null != GameManager.Instance && !GameManager.Instance.IsGameActive)
                 return;

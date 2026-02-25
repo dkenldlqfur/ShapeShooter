@@ -37,9 +37,7 @@ namespace ShapeShooter
             foreach (var filter in filters)
             {
                 if (null != filter.GetComponent<MeshCollider>() && null == filter.GetComponent<PolygonColorManager>())
-                {
                     filter.gameObject.AddComponent<PolygonColorManager>();
-                }
             }
 
             polygonManagers = GetComponentsInChildren<PolygonColorManager>();
@@ -163,9 +161,9 @@ namespace ShapeShooter
         {
             return pattern switch
             {
-                RotationPatternType.SingleAxis => CARDINAL_AXES[Random.Range(0, CARDINAL_AXES.Length)],
-                RotationPatternType.MultiAxis or RotationPatternType.ReactiveAxis
-                    => new Vector3(Random.value, Random.value, Random.value).normalized,
+                RotationPatternType.SingleAxis      => CARDINAL_AXES[Random.Range(0, CARDINAL_AXES.Length)],
+                RotationPatternType.MultiAxis       => new Vector3(Random.value, Random.value, Random.value).normalized,
+                RotationPatternType.ReactiveAxis    => new Vector3(Random.value, Random.value, Random.value).normalized,
                 _ => Vector3.zero
             };
         }
@@ -199,7 +197,7 @@ namespace ShapeShooter
             {
                 elapsed += Time.deltaTime;
                 float currentSpeed = Mathf.Lerp(startSpeed, 0f, elapsed / duration);
-                transform.Rotate(Vector3.up * currentSpeed * Time.deltaTime);
+                transform.Rotate(currentSpeed * Time.deltaTime * Vector3.up);
                 await UniTask.Yield(PlayerLoopTiming.Update);
             }
         }
@@ -243,7 +241,7 @@ namespace ShapeShooter
         /// </summary>
         private void RotateFixedAxis(Vector3 axis)
         {
-            transform.Rotate(axis * currentLevelData.rotationSpeed * Time.deltaTime);
+            transform.Rotate(currentLevelData.rotationSpeed * Time.deltaTime * axis);
         }
 
         /// <summary>
@@ -257,7 +255,7 @@ namespace ShapeShooter
 
             while (duration > elapsed && isRotating && !token.IsCancellationRequested)
             {
-                transform.Rotate(randomAxis * currentLevelData.rotationSpeed * Time.deltaTime);
+                transform.Rotate(currentLevelData.rotationSpeed * Time.deltaTime * randomAxis);
                 elapsed += Time.deltaTime;
                 await UniTask.Yield(PlayerLoopTiming.Update, token);
             }

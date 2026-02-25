@@ -20,7 +20,7 @@ namespace ShapeShooter
         private void OnEnable()
         {
             isReturning = false;
-            cts = new();
+            cts = new CancellationTokenSource();
             AutoReturnToPool(cts.Token).Forget();
         }
 

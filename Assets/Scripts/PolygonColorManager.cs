@@ -6,13 +6,13 @@ namespace ShapeShooter
 {
     public enum FaceColorType
     {
-        White = 0,
-        Red = 1,
-        Orange = 2,
-        Yellow = 3,
-        Green = 4,
-        Blue = 5,
-        Purple = 6,
+        White   = 0,
+        Red     = 1,
+        Orange  = 2,
+        Yellow  = 3,
+        Green   = 4,
+        Blue    = 5,
+        Purple  = 6,
     }
 
     /// <summary>
@@ -31,13 +31,13 @@ namespace ShapeShooter
         {
             return type switch
             {
-                FaceColorType.White => Color.white,
-                FaceColorType.Red => Color.red,
-                FaceColorType.Orange => new Color(1f, 0.5f, 0f),
-                FaceColorType.Yellow => Color.yellow,
-                FaceColorType.Green => Color.green,
-                FaceColorType.Blue => Color.blue,
-                FaceColorType.Purple => new Color(0.6f, 0.2f, 0.8f),
+                FaceColorType.White     => Color.white,
+                FaceColorType.Red       => Color.red,
+                FaceColorType.Orange    => new(1f, 0.5f, 0f),
+                FaceColorType.Yellow    => Color.yellow,
+                FaceColorType.Green     => Color.green,
+                FaceColorType.Blue      => Color.blue,
+                FaceColorType.Purple    => new(0.6f, 0.2f, 0.8f),
                 _ => Color.white
             };
         }
@@ -62,13 +62,13 @@ namespace ShapeShooter
             public int currentHP;
             public int maxHP;
             public bool isCompleted;
-            public List<int> vertexIndices = new List<int>(); // 각 다각형의 정점 인덱스 저장
+            public List<int> vertexIndices = new(); // 각 다각형의 정점 인덱스 저장
             public Vector3 normal;
             public float offset;
             public Color originalColor;
         }
 
-        private List<FaceGroup> faceGroups = new List<FaceGroup>();
+        private List<FaceGroup> faceGroups = new();
 
         public int TotalFaces => faceGroups.Count;
         public int CompletedFaces { get; private set; }
@@ -85,15 +85,10 @@ namespace ShapeShooter
             meshRenderer = GetComponent<MeshRenderer>();
 
             if (null != meshCollider && null == meshCollider.sharedMesh && null != meshFilter)
-            {
                 meshCollider.sharedMesh = meshFilter.sharedMesh;
-            }
 
             if (null == meshCollider || null == meshCollider.sharedMesh)
-            {
-                Debug.LogWarning($"{name}??MeshCollider ?는 ?본 메쉬가 ?습?다.");
                 return;
-            }
 
             CreateIndependentPolygons();
             GroupFaces();
@@ -110,7 +105,7 @@ namespace ShapeShooter
             vertices = new Vector3[origTris.Length];
             normals = new Vector3[origTris.Length];
             colors = new Color[origTris.Length];
-            int[] newTris = new int[origTris.Length];
+            var newTris = new int[origTris.Length];
 
             bool hasNormals = origNorms.Length > 0;
             bool hasColors = originalMesh.colors.Length > 0;
@@ -119,6 +114,7 @@ namespace ShapeShooter
             {
                 int origIndex = origTris[i];
                 vertices[i] = origVerts[origIndex];
+
                 if (hasNormals)
                     normals[i] = origNorms[origIndex];
                 else
@@ -128,20 +124,23 @@ namespace ShapeShooter
                     colors[i] = originalMesh.colors[origIndex];
                 else
                     colors[i] = Color.white;
+
                 newTris[i] = i;
             }
 
-            separatedMesh = new Mesh();
-            separatedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-            separatedMesh.vertices = vertices;
-            separatedMesh.normals = normals;
-            separatedMesh.colors = colors;
-            separatedMesh.triangles = newTris;
+            separatedMesh = new()
+            {
+                indexFormat = UnityEngine.Rendering.IndexFormat.UInt32,
+                vertices = vertices,
+                normals = normals,
+                colors = colors,
+                triangles = newTris
+            };
 
             meshFilter.mesh = separatedMesh;
 
             // 깊이(Z) 버퍼에 쓰고 Z 테스트가 정상적으로 동작하는 3D 정점 색상 전용 커스텀 머티리얼 적용
-            Material mat = new Material(Shader.Find("Custom/VertexColorUnlit"));
+            var mat = new Material(Shader.Find("Custom/VertexColorUnlit"));
             meshRenderer.material = mat;
         }
 
@@ -159,7 +158,6 @@ namespace ShapeShooter
 
                 foreach (var group in faceGroups)
                 {
-                    // 방향?거리가 ?치?는 ?찾기 (?일 ?면 조건)
                     if (Vector3.Angle(group.normal, normal) < 1.0f && Mathf.Abs(group.offset - offset) < 0.001f)
                     {
                         targetGroup = group;
@@ -169,7 +167,7 @@ namespace ShapeShooter
 
                 if (null == targetGroup)
                 {
-                    targetGroup = new FaceGroup
+                    targetGroup = new()
                     {
                         maxHP = this.maxHP,
                         currentHP = this.maxHP,
@@ -181,7 +179,6 @@ namespace ShapeShooter
                     faceGroups.Add(targetGroup);
                 }
 
-                // ?나???각?을 ?루??3개의 ?점 ?덱?????
                 targetGroup.vertexIndices.Add(i);
                 targetGroup.vertexIndices.Add(i + 1);
                 targetGroup.vertexIndices.Add(i + 2);
@@ -192,10 +189,8 @@ namespace ShapeShooter
         {
             foreach (var group in faceGroups)
             {
-                Color faceColor;
-                if (0 == group.currentHP)
-                    faceColor = group.originalColor;
-                else
+                Color faceColor = group.originalColor;
+                if (0 != group.currentHP)
                     faceColor = GetColorByHP(group.currentHP);
                 foreach (int vIndex in group.vertexIndices)
                 {
@@ -322,10 +317,8 @@ namespace ShapeShooter
                 hitGroup.currentHP--;
             }
 
-            Color newColor;
-            if (0 == hitGroup.currentHP)
-                newColor = hitGroup.originalColor;
-            else
+            Color newColor = hitGroup.originalColor;
+            if (0 != hitGroup.currentHP)
                 newColor = GetColorByHP(hitGroup.currentHP);
             foreach (int vIndex in hitGroup.vertexIndices)
             {

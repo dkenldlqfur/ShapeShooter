@@ -67,12 +67,9 @@ namespace ShapeShooter
         private GameObject currentShapeGameObj;
         private Camera sceneMainCamera;
 
-        // 카운트다운 및 UI 표시 시간 상수 (밀리초)
-        private const int COUNTDOWN_START = 3;
-        private const int COUNTDOWN_INTERVAL_MS = 1000;
-        private const int START_MESSAGE_DURATION_MS = 500;
-        private const int STAGE_CLEAR_DISPLAY_MS = 3000;
-        private const int GAME_CLEAR_DISPLAY_MS = 3000;
+        [Header("Game Settings")]
+        [SerializeField] private GameSettings gameSettings;
+
 
         private void OnApplicationQuit()
         {
@@ -124,8 +121,7 @@ namespace ShapeShooter
 
                 listener.enabled = false;
 
-                var cam = listener.GetComponent<Camera>();
-                if (null != cam)
+                if (listener.TryGetComponent<Camera>(out var cam))
                 {
                     sceneMainCamera = cam;
                     cam.gameObject.SetActive(false);
@@ -147,16 +143,30 @@ namespace ShapeShooter
             IsGameActive = false;
             var gameUI = FindAnyObjectByType<GameUI>();
 
-            for (int i = COUNTDOWN_START; 0 < i; i--)
+            int currentCountdownStart = 3;
+            if (null != gameSettings)
+                currentCountdownStart = gameSettings.countdownStart;
+
+            int currentCountdownIntervalMs = 1000;
+            if (null != gameSettings)
+                currentCountdownIntervalMs = gameSettings.countdownIntervalMs;
+
+            int currentStartMessageDurationMs = 500;
+            if (null != gameSettings)
+                currentStartMessageDurationMs = gameSettings.startMessageDurationMs;
+
+            for (int i = currentCountdownStart; 0 < i; i--)
             {
                 if (null != gameUI)
                     gameUI.SetCountdownText($"Stage {CurrentStageIndex + 1}\n{i}");
-                await UniTask.Delay(COUNTDOWN_INTERVAL_MS);
+                
+                await UniTask.Delay(currentCountdownIntervalMs);
             }
 
             if (null != gameUI)
                 gameUI.SetCountdownText("시작!");
-            await UniTask.Delay(START_MESSAGE_DURATION_MS);
+            
+            await UniTask.Delay(currentStartMessageDurationMs);
 
             if (null != gameUI)
                 gameUI.SetCountdownText("");
@@ -255,7 +265,11 @@ namespace ShapeShooter
 
         private async UniTaskVoid ProceedToNextStage()
         {
-            await UniTask.Delay(STAGE_CLEAR_DISPLAY_MS);
+            int currentStageClearDisplayMs = 3000;
+            if (null != gameSettings)
+                currentStageClearDisplayMs = gameSettings.stageClearDisplayMs;
+
+            await UniTask.Delay(currentStageClearDisplayMs);
 
             bool loaded = await LoadStage(CurrentStageIndex + 1, false);
             if (loaded)
@@ -286,7 +300,12 @@ namespace ShapeShooter
                     gameUI.SetCountdownText("게임 클리어!");
                 
                 OnGameClear?.Invoke();
-                await UniTask.Delay(GAME_CLEAR_DISPLAY_MS);
+                
+                int currentGameClearDisplayMs = 3000;
+                if (null != gameSettings)
+                    currentGameClearDisplayMs = gameSettings.gameClearDisplayMs;
+
+                await UniTask.Delay(currentGameClearDisplayMs);
             }
             else
             {

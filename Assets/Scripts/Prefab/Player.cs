@@ -38,11 +38,11 @@ namespace ShapeShooter
                 .With("Right", "<Keyboard>/rightArrow");
 
             // 발사 입력: Space, 마우스 좌클릭
-            fireAction = new("Fire", binding: "<Keyboard>/space");
+            fireAction = new InputAction("Fire", binding: "<Keyboard>/space");
             fireAction.AddBinding("<Mouse>/leftButton");
 
             // 가속 입력: Left Shift
-            boostAction = new("Sprint", binding: "<Keyboard>/leftShift");
+            boostAction = new InputAction("Sprint", binding: "<Keyboard>/leftShift");
 
             initialPosition = transform.position;
             initialRotation = transform.rotation;

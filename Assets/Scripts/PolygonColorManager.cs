@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace ShapeShooter
 {
-    public enum FaceColorType
+    public enum PolygonColorType
     {
         White   = 0,
         Red     = 1,
@@ -16,35 +17,37 @@ namespace ShapeShooter
     }
 
     /// <summary>
-    /// 단일 원본 메쉬를 폴리곤(삼각형) 단위로 분할하여 독립적인 정점/색상을 갖도록 재구성합니다.
-    /// 각 폴리곤을 독립 그룹으로 관리하며, Raycast 타격 지점 기반의 충돌 색상 변경 체계를 담당합니다.
+    /// 메쉬 데이터를 폴리곤 단위의 하위 엔티티로 분석 및 분할하여 독립적인 그래픽스와 상태 데이터를 부여하는 매니저 클래스입니다.
+    /// Ray 충돌 기반의 정확한 타격 지점 산출과 이에 따른 정점 색상 갱신 파이프라인을 일괄 제어합니다.
     /// </summary>
     public class PolygonColorManager : MonoBehaviour
     {
+        private const float RESTORE_DURATION = 0.8f;
+
         public static Color GetColorByHP(int hp)
         {
-            var colorType = (FaceColorType)Mathf.Clamp(hp, 0, (int)FaceColorType.Purple);
+            var colorType = (PolygonColorType)Mathf.Clamp(hp, 0, (int)PolygonColorType.Purple);
             return GetColor(colorType);
         }
 
-        public static Color GetColor(FaceColorType type)
+        public static Color GetColor(PolygonColorType type)
         {
             return type switch
             {
-                FaceColorType.White     => Color.white,
-                FaceColorType.Red       => Color.red,
-                FaceColorType.Orange    => new(1f, 0.5f, 0f),
-                FaceColorType.Yellow    => Color.yellow,
-                FaceColorType.Green     => Color.green,
-                FaceColorType.Blue      => Color.blue,
-                FaceColorType.Purple    => new(0.6f, 0.2f, 0.8f),
+                PolygonColorType.White     => Color.white,
+                PolygonColorType.Red       => Color.red,
+                PolygonColorType.Orange    => new(1f, 0.5f, 0f),
+                PolygonColorType.Yellow    => Color.yellow,
+                PolygonColorType.Green     => Color.green,
+                PolygonColorType.Blue      => Color.blue,
+                PolygonColorType.Purple    => new(0.6f, 0.2f, 0.8f),
                 _ => Color.white
             };
         }
 
-        public event Action OnFaceHit;
-        public event Action OnFaceCompleted;
-        public event Action OnFaceRestored;
+        public event Action OnPolygonHit;
+        public event Action OnPolygonCompleted;
+        public event Action OnPolygonRestored;
 
         private MeshCollider meshCollider;
         private MeshFilter meshFilter;
@@ -58,7 +61,7 @@ namespace ShapeShooter
         private int maxHP = 1;
 
         /// <summary>
-        /// 개별 폴리곤(삼각형) 단위의 색상/HP 관리 그룹
+        /// 분할된 독립 폴리곤에 대한 상태 추적 및 메타데이터 컨테이너입니다.
         /// </summary>
         private class PolygonGroup
         {
@@ -69,25 +72,34 @@ namespace ShapeShooter
             public Color originalColor;
         }
 
-        private PolygonGroup[] polygonGroups;
+        /// <summary>
+        /// HP 0→1 복원 시 색상이 서서히 번져가는 애니메이션의 상태 데이터입니다.
+        /// </summary>
+        private class RestoreAnimation
+        {
+            public int groupIndex;
+            public float progress;  // 0 → 1
+            public Color targetColor;
+        }
 
-        public int TotalFaces 
+        private PolygonGroup[] polygonGroups;
+        private readonly List<RestoreAnimation> activeRestoreAnimations = new();
+
+        public int TotalPolygons
         {
             get
             {
                 if (null != polygonGroups)
-                {
                     return polygonGroups.Length;
-                }
                 return 0;
             }
         }
-        public int CompletedFaces { get; private set; }
+        public int CompletedPolygons { get; private set; }
 
         public void Initialize(LevelData levelData)
         {
             if (null != levelData)
-                maxHP = levelData.requiredHitsPerFace;
+                maxHP = levelData.requiredHitsPerPolygon;
             else
                 maxHP = 1;
 
@@ -100,7 +112,7 @@ namespace ShapeShooter
 
             CreateIndependentPolygons();
 
-            // 분리된 메쉬를 MeshCollider에 할당하여 triangleIndex가 polygonGroups 인덱스와 일치하도록 보장
+            // 분리된 메쉬를 물리 계층에 편입시킴으로써 충돌 인덱스와 내부 데이터 모델의 동기화를 무결하게 보장합니다.
             if (null != meshCollider)
                 meshCollider.sharedMesh = separatedMesh;
 
@@ -114,9 +126,7 @@ namespace ShapeShooter
             if (null != meshCollider)
             {
                 if (null != meshCollider.sharedMesh)
-                {
                     originalMesh = meshCollider.sharedMesh;
-                }
             }
             int[] origTris = originalMesh.triangles;
             Vector3[] origVerts = originalMesh.vertices;
@@ -127,8 +137,13 @@ namespace ShapeShooter
             colors = new Color[origTris.Length];
             var newTris = new int[origTris.Length];
 
-            bool hasNormals = origNorms.Length > 0;
-            bool hasColors = originalMesh.colors.Length > 0;
+            // UV0: 정점당 무게중심(Barycentric) 좌표
+            var baryUVs = new Vector2[origTris.Length];
+            // UV1: 정점당 원본 메쉬 색상 (Vector3 RGB 형태로 저장)
+            var origColorUVs = new Vector3[origTris.Length];
+
+            bool hasNormals = 0 < origNorms.Length;
+            bool hasColors = 0 < originalMesh.colors.Length;
 
             for (int i = 0; i < origTris.Length; i++)
             {
@@ -146,26 +161,42 @@ namespace ShapeShooter
                     colors[i] = Color.white;
 
                 newTris[i] = i;
+
+                // 삼각형의 3개 정점에 무게중심 좌표 (1,0), (0,1), (0,0) 을 각각 할당합니다.
+                int vertInTri = i % 3;
+                baryUVs[i] = vertInTri switch
+                {
+                    0 => new Vector2(1f, 0f),
+                    1 => new Vector2(0f, 1f),
+                    _ => new Vector2(0f, 0f),
+                };
+
+                // 셰이더에서 참조할 원본 색상을 UV1 채널에 저장합니다.
+                origColorUVs[i] = new Vector3(colors[i].r, colors[i].g, colors[i].b);
             }
 
             separatedMesh = new Mesh()
             {
-                indexFormat = UnityEngine.Rendering.IndexFormat.UInt32,
+                indexFormat = IndexFormat.UInt32,
                 vertices = vertices,
                 normals = normals,
                 colors = colors,
                 triangles = newTris
             };
 
+            // 무게중심 좌표 및 원본 색상 UV 채널을 메쉬에 주입합니다.
+            separatedMesh.SetUVs(0, baryUVs);
+            separatedMesh.SetUVs(1, origColorUVs);
+
             meshFilter.mesh = separatedMesh;
 
-            // 깊이(Z) 버퍼에 쓰고 Z 테스트가 정상적으로 동작하는 3D 정점 색상 전용 커스텀 머티리얼 적용
+            // 렌더링 파이프라인 최적화 및 Z-Buffer 오류 억제를 위해 정점 단위의 채색 셰이더 기반 머티리얼을 연동합니다.
             var mat = new Material(Shader.Find("Custom/VertexColorUnlit"));
             meshRenderer.material = mat;
         }
 
         /// <summary>
-        /// 각 삼각형을 독립 폴리곤 그룹으로 초기화합니다. (면 그룹핑 없음)
+        /// 분할된 서브 메쉬 단위별로 별개의 논리형 생명주기를 주입하고 초기화합니다.
         /// </summary>
         private void BuildPolygonGroups()
         {
@@ -194,6 +225,9 @@ namespace ShapeShooter
                 if (0 != group.currentHP)
                     polygonColor = GetColorByHP(group.currentHP);
 
+                // Alpha=1은 셰이더가 스프레드 애니메이션 없이 색상을 직접 렌더링하도록 지시합니다.
+                polygonColor.a = 1f;
+
                 colors[group.vertexBase] = polygonColor;
                 colors[group.vertexBase + 1] = polygonColor;
                 colors[group.vertexBase + 2] = polygonColor;
@@ -201,9 +235,56 @@ namespace ShapeShooter
             separatedMesh.colors = colors;
         }
 
+        private void Update()
+        {
+            if (0 == activeRestoreAnimations.Count)
+                return;
+
+            bool isDirty = false;
+
+            for (int i = activeRestoreAnimations.Count - 1; 0 <= i; i--)
+            {
+                var anim = activeRestoreAnimations[i];
+                anim.progress += Time.deltaTime * 0.5f;
+
+                if (1f <= anim.progress)
+                {
+                    // 애니메이션 완료: 최종 색상을 전체 Alpha 값으로 확정합니다.
+                    anim.progress = 1f;
+                    polygonGroups[anim.groupIndex].currentHP = polygonGroups[anim.groupIndex].maxHP;
+                    SetPolygonColor(polygonGroups[anim.groupIndex].vertexBase, anim.targetColor, 1f);
+                    activeRestoreAnimations.RemoveAt(i);
+                }
+                else
+                {
+                    // 정점 Alpha를 통해 채움 진행률을 갱신합니다 (셰이더가 스프레드 이펙트에 사용).
+                    float easedProgress = EaseOutCubic(anim.progress);
+                    SetPolygonColor(polygonGroups[anim.groupIndex].vertexBase, anim.targetColor, easedProgress);
+                }
+
+                isDirty = true;
+            }
+
+            if (isDirty)
+                separatedMesh.colors = colors;
+        }
+
+        private static float EaseOutCubic(float t)
+        {
+            float f = 1f - t;
+            return 1f - f * f * f;
+        }
+
+        private void SetPolygonColor(int vertexBase, Color color, float alpha)
+        {
+            color.a = alpha;
+            colors[vertexBase] = color;
+            colors[vertexBase + 1] = color;
+            colors[vertexBase + 2] = color;
+        }
+
         /// <summary>
-        /// Möller–Trumbore ray-triangle intersection algorithm
-        /// Returns true if the ray intersects the triangle, and outputs the distance t
+        /// Möller-Trumbore 광선-삼각형 교차 판독 알고리즘입니다. 평면상의 교차 여부 및 거리 t를 산출합니다.
         /// </summary>
         private bool IntersectRayTriangle(Vector3 rayOrigin, Vector3 rayDir, Vector3 v0, Vector3 v1, Vector3 v2, out float t)
         {
@@ -215,19 +296,19 @@ namespace ShapeShooter
             float a = Vector3.Dot(edge1, h);
 
             if (a > -EPSILON && a < EPSILON)
-                return false; // Ray is parallel to this triangle.
+                return false; // 해당 광선 벡터가 삼면과 평행 구도에 있어 교차불능(Parallel) 상태임을 시사합니다.
 
             float f = 1.0f / a;
             Vector3 s = rayOrigin - v0;
             float u = f * Vector3.Dot(s, h);
 
-            if (u < 0.0f || u > 1.0f)
+            if (0.0f > u || 1.0f < u)
                 return false;
 
             Vector3 q = Vector3.Cross(s, edge1);
             float v = f * Vector3.Dot(rayDir, q);
 
-            if (v < 0.0f || u + v > 1.0f)
+            if (0.0f > v || 1.0f < u + v)
                 return false;
 
             t = f * Vector3.Dot(edge2, q);
@@ -236,8 +317,7 @@ namespace ShapeShooter
 
         private int FindHitTriangleByRaycast(Vector3 hitPointWorld, Vector3 rayForwardWorld)
         {
-            // 발사체의 궤적을 로컬 공간 선분(Ray)으로 변환
-            // 충돌 지점에서 약간 뒤에서 출발하는 Ray 생성
+            // 투사체의 로컬-월드 좌표 트랜스폼 역순행을 도출하고 연장선상의 광선을 재구성합니다.
             Vector3 originWorld = hitPointWorld - rayForwardWorld * 2.0f;
             Vector3 localOrigin = transform.InverseTransformPoint(originWorld);
             Vector3 localDir = transform.InverseTransformDirection(rayForwardWorld).normalized;
@@ -263,7 +343,7 @@ namespace ShapeShooter
                 }
             }
 
-            // 레이캐스트가 실패한 경우, 거리를 이용한 최후의 보루 (기존 방식 개선: 폴리곤 중심점 거리 비교)
+            // 광선 역추적 실패 시, 지리적 원점을 기준으로 한 백업 폴백(Fallback) 보정 루틴입니다.
             if (-1 == bestTriangle)
             {
                 Vector3 localHit = transform.InverseTransformPoint(hitPointWorld);
@@ -285,11 +365,11 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// Raycast의 triangleIndex를 사용하여 정확히 맞힌 폴리곤의 색상을 변경합니다.
+        /// 물리 연산 엔진에 의해 판독 완료된 인덱스 레퍼런스 값에 대응하는 도형 데이터의 색상 변화 이벤트를 트리거합니다.
         /// </summary>
         public void OnHitAccurate(Vector3 hitPointWorld, Vector3 hitNormalWorld, Vector3 bulletForward, int colliderTriangleIndex)
         {
-            // 뒷면 타격 무시 (내적 > 0 이면 안쪽에서 바깥쪽으로 향하는 경우)
+            // 폴리곤의 Normal 벡터와 투척물의 진행 방향간의 내적(Dot)이 양수일 경우 메쉬 배면(Culling 뒷쪽) 피격이므로 연산을 차단합니다.
             if (0.2f < Vector3.Dot(hitNormalWorld, bulletForward))
                 return;
 
@@ -297,24 +377,20 @@ namespace ShapeShooter
                 return;
 
             int triIndex = colliderTriangleIndex;
-            string method = "Raycast TriangleIndex";
-            
+
             if (-1 == triIndex || triIndex >= polygonGroups.Length)
-            {
                 triIndex = FindHitTriangleByRaycast(hitPointWorld, bulletForward);
-                method = "Ray-Triangle Fallback";
-            }
 
             if (-1 == triIndex)
                 return;
 
 
-            OnFaceHit?.Invoke();
-            ApplyHitToPolygon(polygonGroups[triIndex]);
+            OnPolygonHit?.Invoke();
+            ApplyHitToPolygon(triIndex, hitNormalWorld, bulletForward);
         }
 
         /// <summary>
-        /// (구버전 하위 호환) 가장 가까운 정점을 통해 타격 폴리곤을 판별하고 HP를 깎습니다.
+        /// 레거시 근사적 공간 보정 방식의 타격 폴리곤 판정 및 생명력 차감 호출 기능입니다.
         /// </summary>
         public void OnHit(Vector3 hitPointWorld, Vector3 bulletForward)
         {
@@ -325,55 +401,107 @@ namespace ShapeShooter
             Vector3 hitNormalLocal = normals[triIndex * 3];
             Vector3 worldNormal = transform.TransformDirection(hitNormalLocal);
 
-            // 뒷면 타격 무시 (내적 > 0 이면 안쪽에서 바깥쪽으로 향하는 경우)
+            // 배면 피격 연산 차단 블록입니다.
             if (0.2f < Vector3.Dot(worldNormal, bulletForward))
                 return;
 
-            OnFaceHit?.Invoke();
-            ApplyHitToPolygon(polygonGroups[triIndex]);
+            OnPolygonHit?.Invoke();
+            ApplyHitToPolygon(triIndex, worldNormal, bulletForward);
         }
 
-        private void ApplyHitToPolygon(PolygonGroup group)
+        private void ApplyHitToPolygon(int groupIndex, Vector3 hitNormalWorld, Vector3 bulletForward)
         {
+            var group = polygonGroups[groupIndex];
             bool wasCompleted = group.isCompleted;
+
+            // 파티클 이펙트 트리거
+            if (null != ParticleManager.Instance)
+            {
+                Vector3 v0 = transform.TransformPoint(vertices[group.vertexBase]);
+                Vector3 v1 = transform.TransformPoint(vertices[group.vertexBase + 1]);
+                Vector3 v2 = transform.TransformPoint(vertices[group.vertexBase + 2]);
+
+                if (0 != group.currentHP)
+                {
+                    Color currentColor = GetColorByHP(group.currentHP);
+                    ParticleManager.Instance.PlayHitEffect(v0, v1, v2, hitNormalWorld, bulletForward, currentColor);
+                }
+            }
 
             if (0 == group.currentHP)
             {
+                // HP 0→1 복원: 서서히 번져가는 스프레드 애니메이션 개시
                 group.currentHP = 1;
                 group.isCompleted = false;
+                StartRestoreAnimation(groupIndex, GetColorByHP(1));
             }
             else
             {
+                // 스프레드 애니메이션 도중 재피격 시, 진행 중인 복원 애니메이션을 취소합니다.
+                CancelRestoreAnimation(groupIndex);
+
                 group.currentHP--;
+
+                // 즉시 색상 변경 (HP 감소는 기존처럼 즉시 반영)
+                Color newColor = group.originalColor;
+                if (0 != group.currentHP)
+                    newColor = GetColorByHP(group.currentHP);
+
+                newColor.a = 1f;
+                colors[group.vertexBase] = newColor;
+                colors[group.vertexBase + 1] = newColor;
+                colors[group.vertexBase + 2] = newColor;
+                separatedMesh.colors = colors;
             }
-
-            Color newColor = group.originalColor;
-            if (0 != group.currentHP)
-                newColor = GetColorByHP(group.currentHP);
-
-            colors[group.vertexBase] = newColor;
-            colors[group.vertexBase + 1] = newColor;
-            colors[group.vertexBase + 2] = newColor;
-
-            separatedMesh.colors = colors;
 
             if (wasCompleted)
             {
-                CompletedFaces--;
-                OnFaceRestored?.Invoke();
+                CompletedPolygons--;
+                OnPolygonRestored?.Invoke();
             }
             else if (0 == group.currentHP)
             {
                 group.isCompleted = true;
-                CompletedFaces++;
-                OnFaceCompleted?.Invoke();
+                CompletedPolygons++;
+                OnPolygonCompleted?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// HP 0→1 복원 시 색상이 삼각형 중심에서 바깥쪽으로 서서히 번져가는 애니메이션을 시작합니다.
+        /// </summary>
+        private void StartRestoreAnimation(int groupIndex, Color targetColor)
+        {
+            // 동일 면의 기존 복원 애니메이션을 선제적으로 취소합니다.
+            CancelRestoreAnimation(groupIndex);
+
+            // 초기 상태: RGB는 목표 색상, Alpha=0 (셰이더가 원본 색상을 표시)
+            SetPolygonColor(polygonGroups[groupIndex].vertexBase, targetColor, 0f);
+            separatedMesh.colors = colors;
+
+            var animation = new RestoreAnimation
+            {
+                groupIndex = groupIndex,
+                progress = 0f,
+                targetColor = targetColor
+            };
+
+            activeRestoreAnimations.Add(animation);
+        }
+
+        /// <summary>
+        /// 지정된 폴리곤의 진행 중인 복원 애니메이션을 취소합니다.
+        /// </summary>
+        private void CancelRestoreAnimation(int groupIndex)
+        {
+            for (int i = activeRestoreAnimations.Count - 1; 0 <= i; i--)
+            {
+                if (activeRestoreAnimations[i].groupIndex == groupIndex)
+                {
+                    activeRestoreAnimations.RemoveAt(i);
+                    break;
+                }
             }
         }
     }
 }
-
-
-
-
-
-

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace ShapeShooter
 {
     /// <summary>
-    /// 스테이지 클리어 기록
+    /// 개별 스테이지 클리어에 대한 시간 및 소모 탄환 등의 성과 기록을 저장하는 구조체입니다.
     /// </summary>
     [Serializable]
     public struct StageRecord
@@ -16,8 +16,7 @@ namespace ShapeShooter
     }
 
     /// <summary>
-    /// 게임 전체 흐름 관리 (싱글톤).
-    /// 스테이지 로드, 카운트다운, 게임 루프, 클리어/게임오버, 기록 저장
+    /// 전반적인 게임의 흐름(레벨 전환, 시작/종료 처리, 기록 저장)을 제어하는 최상위 싱글톤 매니저입니다.
     /// </summary>
     public class GameManager : MonoBehaviour
     {
@@ -83,7 +82,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// Inspector 미설정 시 Resources 폴더에서 기본값 로드
+        /// 에디터의 Inspector를 통해 초기 값이 할당되지 않았을 경우, `Resources` 폴더 내 기본값으로 자동 대체 초기화합니다.
         /// </summary>
         private void InitializeDefaults()
         {
@@ -105,7 +104,8 @@ namespace ShapeShooter
         #region 게임 흐름
 
         /// <summary>
-        /// 게임 시작: 플레이어 생성, 씬 카메라 비활성화, 첫 스테이지 로드
+        /// 신규 게임 세션을 가동시킵니다. 플레이어 인스턴스를 생성하고 초기 스테이지를 비동기적으로 로딩합니다.
+        /// 물리 카메라 오버랩 방지를 위해 씬 전역 카메라를 우회 처리합니다.
         /// </summary>
         public async UniTaskVoid StartGame()
         {
@@ -136,7 +136,8 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 카운트다운 표시 후 게임 루프 시작
+        /// UI 시스템과 연동하여 스테이지 시작 전 카운트다운 연출을 수행하는 비동기 함수입니다.
+        /// 연출 종료 후 본격적인 게임 루프를 진입시킵니다.
         /// </summary>
         private async UniTask StartCountdown()
         {
@@ -176,7 +177,8 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 스테이지 로드. 마지막 스테이지 초과 시 게임 클리어 처리 후 false 반환
+        /// 지정된 인덱스의 스테이지 생태계를 구성합니다. 기존 총알과 타겟을 제거하고 플레이어 위치를 리셋한 뒤
+        /// 새로운 도형 개체를 비동기 대기로 인스턴스화합니다.
         /// </summary>
         public async UniTask<bool> LoadStage(int stageIndex, bool autoStart = true)
         {
@@ -220,7 +222,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 게임 활성 동안 매 프레임 타이머를 갱신하는 루프
+        /// 인게임 루프가 동작하는 동안 프레임별로 플레이 타이머를 누적시키는 비동기 백그라운드 태스크입니다.
         /// </summary>
         private async UniTaskVoid GameLoop()
         {
@@ -236,7 +238,7 @@ namespace ShapeShooter
         #region 스테이지 클리어/게임 종료
 
         /// <summary>
-        /// 발사 횟수 증가 (게임 활성 상태에서만)
+        /// 게임이 활성화된 상태일 경우에 한해 플레이어의 시전 횟수 데이터를 갱신합니다.
         /// </summary>
         public void IncrementShotCount()
         {
@@ -245,7 +247,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 스테이지 클리어 처리: 기록 저장, 클리어 메시지 표시, 다음 스테이지 진행
+        /// 현재 활성화된 스테이지를 완료 처리하며 기록을 갱신하고 다음 단계로 진입 대기를 트리거합니다.
         /// </summary>
         public void CompleteStage()
         {
@@ -277,7 +279,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 게임 종료 시작 (클리어 또는 게임오버)
+        /// 게임의 전반적인 세션이 클리어 또는 실패로 완전히 정지되는 시퀀스를 호출합니다.
         /// </summary>
         public void EndGame(bool isClear)
         {
@@ -285,7 +287,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 종료 시퀀스: 총알 정리, 메시지 표시, 오브젝트 파괴, 시작 화면 복귀
+        /// 게임 종료의 코어 루틴입니다. 씬 내 부산물을 제거하고 UI 및 카메라 상태를 초기 모드로 복원합니다.
         /// </summary>
         private async UniTaskVoid EndGameSequence(bool isClear)
         {
@@ -326,7 +328,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 씬 내 모든 활성 총알을 풀에 반환하거나 파괴
+        /// 현재 씬 내에 활성화되어 있는 모든 발사체를 식별하여, 즉시 메모리 풀로 환원하거나 파괴 처리합니다.
         /// </summary>
         private void ClearAllBullets()
         {
@@ -351,7 +353,7 @@ namespace ShapeShooter
         #region 레벨 데이터 및 기록
 
         /// <summary>
-        /// 현재 스테이지의 레벨 데이터 반환
+        /// 현재 인덱스에 대응되는 고유 스테이지 메타데이터 모델을 참조 반환합니다.
         /// </summary>
         public LevelData GetCurrentLevelData()
         {
@@ -361,7 +363,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 스테이지 클리어 기록을 PlayerPrefs에 저장 (더 빠른 기록만 갱신)
+        /// 입력된 시간과 횟수가 과거 최고 기록보다 우수할 경우 로컬 스토리지 볼륨에 영구 보존합니다.
         /// </summary>
         public void SaveStageRecord(int stageIndex, float time, int shots)
         {
@@ -377,7 +379,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// PlayerPrefs에서 스테이지 클리어 기록 조회
+        /// 저장소에 기록된 스테이지별 세부 퍼포먼스 내역을 복원합니다.
         /// </summary>
         public StageRecord GetStageRecord(int stageIndex)
         {

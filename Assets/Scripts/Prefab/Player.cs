@@ -4,7 +4,8 @@ using UnityEngine.InputSystem;
 namespace ShapeShooter
 {
     /// <summary>
-    /// 플레이어 조작 관리. 원점을 중심으로 구면 궤도를 회전 이동하며, 마우스가 위치한 곳(혹은 전방)으로 총알을 발사합니다.
+    /// 플레이어 객체의 궤도 비행 렌더링 시스템 및 조작 입력을 제어하는 컴포넌트입니다.
+    /// 마우스 포인터 방향(혹은 중심점) 측위 방식을 통해 발사체의 궤적을 갱신합니다.
     /// </summary>
     public class Player : MonoBehaviour
     {
@@ -61,7 +62,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 카메라가 항상 원점을 바라보도록 LateUpdate에서 갱신
+        /// 카메라 하위 컴포넌트가 항상 구심점을 응시(LookAt)하도록 후기 프레임 연산을 보정합니다.
         /// </summary>
         private void LateUpdate()
         {
@@ -70,17 +71,17 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 입력 기반 구면 궤도 이동. 외적으로 회전축을 구하고 쿼터니언 회전 적용
+        /// 입력 벡터를 기반으로 대상체 주위의 구면 궤도상 이동을 수행합니다. 외적을 산출하여 회전 쿼터니언을 적용합니다.
         /// </summary>
         private void HandleMovement()
         {
             var input = moveAction.ReadValue<Vector2>();
             var moveDir = (transform.right * input.x) + (transform.up * input.y);
 
-            if (moveDir.sqrMagnitude < 0.001f)
+            if (0.001f > moveDir.sqrMagnitude)
                 return;
 
-            // 위치 벡터 × 이동 방향 = 회전축
+            // 현재 위치 벡터와 이동 대상 벡터의 외적 연산(Cross) 구동을 통해 회전축을 도출합니다.
             var axis = Vector3.Cross(transform.position, moveDir).normalized;
 
             float speedMultiplier = 1.0f;
@@ -91,33 +92,33 @@ namespace ShapeShooter
 
             transform.position = rotation * transform.position;
 
-            // 원점을 바라보는 방향 계산 + 극점 근처 짐벌락 방지
+            // 원점을 수직으로 바라보는 짐벌락 방지 및 중심 정렬 처리 시퀀스입니다.
             var forward = (Vector3.zero - transform.position).normalized;
             var stableUp = rotation * transform.up;
 
-            // forward와 up이 평행하면 right 벡터로 대체
-            if (Vector3.Cross(forward, stableUp).sqrMagnitude < 0.001f)
+            // Forward 벡터 정렬 시 Up 벡터 상실을 막기 위해 교차 대체합니다.
+            if (0.001f > Vector3.Cross(forward, stableUp).sqrMagnitude)
                 stableUp = rotation * transform.right;
 
             transform.rotation = Quaternion.LookRotation(forward, stableUp);
         }
 
         /// <summary>
-        /// 이동 입력이 없을 때 원점 방향으로 회전 보정
+        /// 조작 부재 상태 시 짐벌 정렬을 위한 기본 방향성 보정 연산입니다.
         /// </summary>
         private void LookAtTarget()
         {
             var forward = (Vector3.zero - transform.position).normalized;
             var currentUp = transform.up;
 
-            if (Vector3.Cross(forward, currentUp).sqrMagnitude < 0.001f)
+            if (0.001f > Vector3.Cross(forward, currentUp).sqrMagnitude)
                 currentUp = transform.right;
 
             transform.rotation = Quaternion.LookRotation(forward, currentUp);
         }
 
         /// <summary>
-        /// 발사 입력 시 화면(스크린 좌표)으로 Raycast를 쏘아 타겟을 조준하고 총알을 생성합니다.
+        /// 발사 이벤트 트리거 시, 스크린 스페이스상의 커서 위치를 월드 레이(Ray)로 변환해 충돌점에 투사체를 발포합니다.
         /// </summary>
         private void OnFire(InputAction.CallbackContext context)
         {
@@ -127,15 +128,14 @@ namespace ShapeShooter
             if (null == firePoint)
                 return;
 
-            // 마우스 스크린 좌표 → 월드 레이 생성
+            // 2D 스크린 마우스 포인터의 위치를 3D 공간상의 추상화 레이캐스팅 선분으로 치환합니다.
             var ray = playerCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
-            Vector3 targetPoint;
+            
+            Vector3 targetPoint = ray.GetPoint(100f);
 
-            // 레이가 오브젝트에 맞으면 히트 지점, 아니면 레이 방향 기준 원거리 지점 사용
+            // 레이캐스트가 표면에 닿았을 경우 적시 충돌점을, 아닌 경우 최장 사거리를 강제 부여합니다.
             if (Physics.Raycast(ray, out var hit))
                 targetPoint = hit.point;
-            else
-                targetPoint = ray.GetPoint(100f);
 
             var direction = (targetPoint - firePoint.position).normalized;
             var lookRotation = Quaternion.LookRotation(direction);
@@ -144,11 +144,14 @@ namespace ShapeShooter
             {
                 BulletManager.Instance.Get(firePoint.position, lookRotation);
                 GameManager.Instance.IncrementShotCount();
+
+                if (null != ParticleManager.Instance)
+                    ParticleManager.Instance.PlayMuzzleFlash(firePoint.position, lookRotation);
             }
         }
 
         /// <summary>
-        /// 위치/회전을 초기값으로 리셋 (스테이지 전환 시 사용)
+        /// 씬 전환 등 환경 리셋 시 원형 포지션 데이터로 복원하기 위한 호출점입니다.
         /// </summary>
         public void ResetPosition()
         {

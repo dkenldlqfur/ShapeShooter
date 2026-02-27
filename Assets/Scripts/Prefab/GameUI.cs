@@ -6,7 +6,7 @@ using UnityEngine.UI;
 namespace ShapeShooter
 {
     /// <summary>
-    /// 게임 UI 관리. 카운트다운, 스테이지 정보, 실시간 타이머/탄환 표시, 이전 기록 표시
+    /// 게임 내 모든 최상단 Canvas UI(타이머, 탄환 표기 정보, 카운트다운 및 최고/최신 기록 패널)를 시각적으로 제어합니다.
     /// </summary>
     public class GameUI : MonoBehaviour
     {
@@ -44,7 +44,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 카운트다운 텍스트 스타일 초기 설정
+        /// 카운트다운에 쓰일 메인 텍스트 컴포넌트의 가시성 및 렌더링 스타일을 초기화합니다.
         /// </summary>
         private void InitCountdownText()
         {
@@ -64,7 +64,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 시작 버튼 클릭 시 게임 시작
+        /// 시작 트리거 이벤트 콜백입니다. 대기 상태를 파기하고 메인 게임세션을 지시합니다.
         /// </summary>
         public void OnStartButtonClicked()
         {
@@ -82,7 +82,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 시작 화면으로 전환 (시작 버튼 표시, 게임 정보 패널 숨김)
+        /// 메인 타이틀(대기) 화면 상태의 가시성을 복원합니다.
         /// </summary>
         public void ShowStartBtn()
         {
@@ -97,19 +97,19 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 스테이지 변경 시 스테이지 텍스트 및 이전 기록 갱신
+        /// 매니저로부터 스테이지 갱신 이벤트를 수신하였을 때 과거 기록 표시부를 병합 출력합니다.
         /// </summary>
         private void OnStageChanged(int stageNumber)
         {
             if (null != stageText)
                 stageText.text = $"Stage {stageNumber}";
 
-            // stageNumber는 1부터 시작하므로 인덱스 변환
+            // 뷰 모델 표기 인덱스와 데이터베이스 탐색 인덱스의 오프셋 동기화입니다.
             UpdateRecordUI(stageNumber - 1);
         }
 
         /// <summary>
-        /// 해당 스테이지의 최고 기록을 UI에 반영
+        /// 내부 스토리지에서 인출한 퍼포먼스 기록 데이터를 UI 파이프라인에 시각적으로 반영합니다.
         /// </summary>
         private void UpdateRecordUI(int stageIndex)
         {
@@ -136,7 +136,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 카운트다운 텍스트 설정. 빈 문자열이면 비활성화
+        /// 메인 스크린 타겟 텍스트를 인젝션합니다. 빈 값을 전송 시 해당 컴포넌트를 숨김 처리합니다.
         /// </summary>
         public void SetCountdownText(string text)
         {
@@ -148,7 +148,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 매 프레임 타이머 및 탄환 수를 실시간 갱신하는 루프
+        /// 싱글턴 매니저에 누적된 시간/자원 소모량 변동치를 매 프레임별로 UI 노드에 동기화시키는 비동기 작업입니다.
         /// </summary>
         private async UniTaskVoid UpdateUILoop()
         {

@@ -4,7 +4,8 @@ using UnityEngine.Pool;
 namespace ShapeShooter
 {
     /// <summary>
-    /// 총알 오브젝트 풀 관리 (싱글톤). 총알 생성/회수/파괴 담당
+    /// 발사체(Bullet) 객체들의 생성, 반환, 제거 및 재사용을 담당하는 오브젝트 풀 매니저입니다.
+    /// 메모리 단편화를 방지하고 투사체 생성의 최적화를 수행합니다.
     /// </summary>
     public class BulletManager : MonoBehaviour
     {
@@ -37,8 +38,8 @@ namespace ShapeShooter
         }
 
         [SerializeField] private Bullet bulletPrefab;
-        [SerializeField] private int defaultCapacity = 20;
-        [SerializeField] private int maxSize = 100;
+        [SerializeField] private int defaultCapacity = 50;
+        [SerializeField] private int maxSize = 300;
 
         private IObjectPool<Bullet> pool;
 
@@ -48,37 +49,17 @@ namespace ShapeShooter
                 return;
 
             pool = new ObjectPool<Bullet>(
-                createFunc: CreateBullet,
-                actionOnGet: OnGetBullet,
-                actionOnRelease: OnReleaseBullet,
-                actionOnDestroy: OnDestroyBullet,
+                createFunc: () => Instantiate(bulletPrefab, transform),
+                actionOnGet: b => b.gameObject.SetActive(true),
+                actionOnRelease: b => b.gameObject.SetActive(false),
+                actionOnDestroy: b => Destroy(b.gameObject),
                 defaultCapacity: defaultCapacity,
                 maxSize: maxSize
             );
         }
 
-        private Bullet CreateBullet()
-        {
-            return Instantiate(bulletPrefab, transform);
-        }
-
-        private void OnGetBullet(Bullet bullet)
-        {
-            bullet.gameObject.SetActive(true);
-        }
-
-        private void OnReleaseBullet(Bullet bullet)
-        {
-            bullet.gameObject.SetActive(false);
-        }
-
-        private void OnDestroyBullet(Bullet bullet)
-        {
-            Destroy(bullet.gameObject);
-        }
-
         /// <summary>
-        /// 풀에서 총알을 꺼내 지정 위치/회전으로 배치
+        /// 풀 내부에서 가용한 발사체 객체를 찾아 지정된 위치 및 회전값으로 배치한 뒤 반환합니다.
         /// </summary>
         public Bullet Get(Vector3 position = default, Quaternion rotation = default)
         {
@@ -91,7 +72,7 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 총알을 풀에 반환
+        /// 수명이 다하거나 충돌이 완료된 대상을 다시 내부 풀 보관소로 환원합니다.
         /// </summary>
         public void Return(Bullet bullet)
         {

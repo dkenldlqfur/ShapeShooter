@@ -14,5 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ShapeShooter.Core.LevelData
   shapePrefab: {fileID: 6719312195266995134, guid: d1ef69b3334676042a162a585b053a49, type: 3}
   rotationSpeed: 30
-  rotationPattern: 1
-  requiredHitsPerFace: 1
+  rotationPattern: 2
+  requiredHitsPerPolygon: 2

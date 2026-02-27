@@ -42,6 +42,7 @@ namespace ShapeShooter
         [SerializeField] private int maxSize = 300;
 
         private IObjectPool<Bullet> pool;
+        private readonly System.Collections.Generic.HashSet<Bullet> activeBullets = new();
 
         private void InitPool()
         {
@@ -68,6 +69,9 @@ namespace ShapeShooter
 
             var bullet = pool.Get();
             bullet.transform.SetPositionAndRotation(position, rotation);
+            
+            activeBullets.Add(bullet);
+            
             return bullet;
         }
 
@@ -77,7 +81,33 @@ namespace ShapeShooter
         public void Return(Bullet bullet)
         {
             if (gameObject.activeInHierarchy && null != pool)
+            {
+                activeBullets.Remove(bullet);
                 pool.Release(bullet);
+            }
+        }
+
+        /// <summary>
+        /// 현재 활성화되어 있는 모든 발사체를 추적하여 메모리 풀로 일괄 회수합니다.
+        /// </summary>
+        public void ClearAllActiveBullets()
+        {
+            if (null == pool)
+                return;
+
+            // 순회를 위해 배열로 복사하여 안전하게 Release 처리
+            var bulletsToReturn = new Bullet[activeBullets.Count];
+            activeBullets.CopyTo(bulletsToReturn);
+
+            foreach (var bullet in bulletsToReturn)
+            {
+                if (null != bullet && bullet.gameObject.activeInHierarchy)
+                {
+                    Return(bullet);
+                }
+            }
+            
+            activeBullets.Clear();
         }
     }
 }

@@ -57,6 +57,16 @@ namespace ShapeShooter
         [Header("Levels")]
         [SerializeField] private LevelData[] levels;
 
+        public int TotalStages
+        {
+            get
+            {
+                if (null != levels)
+                    return levels.Length;
+                return 0;
+            }
+        }
+
         public int CurrentStageIndex { get; private set; }
         public float StageTimer { get; private set; }
         public int ShotCount { get; private set; }
@@ -159,7 +169,13 @@ namespace ShapeShooter
             for (int i = currentCountdownStart; 0 < i; i--)
             {
                 if (null != gameUI)
-                    gameUI.SetCountdownText($"Stage {CurrentStageIndex + 1}\n{i}");
+                {
+                    string stageString = $"Stage {CurrentStageIndex + 1}";
+                    if (CurrentStageIndex + 1 == TotalStages)
+                        stageString = "FINAL STAGE";
+
+                    gameUI.SetCountdownText($"{stageString}\n{i}");
+                }
                 
                 await UniTask.Delay(currentCountdownIntervalMs);
             }
@@ -173,7 +189,7 @@ namespace ShapeShooter
                 gameUI.SetCountdownText("");
             
             IsGameActive = true;
-            GameLoop().Forget();
+            GameLoop(this.GetCancellationTokenOnDestroy()).Forget();
         }
 
         /// <summary>
@@ -199,10 +215,8 @@ namespace ShapeShooter
                 Destroy(currentShapeGameObj);
 
             if (null != currentPlayer)
-            {
                 if (currentPlayer.TryGetComponent<Player>(out var playerComp))
                     playerComp.ResetPosition();
-            }
 
             var levelData = levels[stageIndex];
             if (null != levelData && null != levelData.shapePrefab)
@@ -215,7 +229,7 @@ namespace ShapeShooter
             if (autoStart)
             {
                 IsGameActive = true;
-                GameLoop().Forget();
+                GameLoop(this.GetCancellationTokenOnDestroy()).Forget();
             }
 
             return true;
@@ -224,12 +238,12 @@ namespace ShapeShooter
         /// <summary>
         /// 인게임 루프가 동작하는 동안 프레임별로 플레이 타이머를 누적시키는 비동기 백그라운드 태스크입니다.
         /// </summary>
-        private async UniTaskVoid GameLoop()
+        private async UniTaskVoid GameLoop(System.Threading.CancellationToken token)
         {
-            while (IsGameActive)
+            while (IsGameActive && !token.IsCancellationRequested)
             {
                 StageTimer += Time.deltaTime;
-                await UniTask.Yield(PlayerLoopTiming.Update);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
             }
         }
 
@@ -332,18 +346,23 @@ namespace ShapeShooter
         /// </summary>
         private void ClearAllBullets()
         {
-            var bullets = FindObjectsByType<Bullet>(FindObjectsSortMode.None);
-            foreach (var bullet in bullets)
+            if (null != BulletManager.Instance)
             {
-                if (null != bullet && bullet.gameObject.activeInHierarchy)
+                BulletManager.Instance.ClearAllActiveBullets();
+            }
+            else
+            {
+                // BulletManager가 누락되었을 경우를 대비한 안전망(Fallback) 대응입니다.
+                var bullets = FindObjectsByType<Bullet>(FindObjectsSortMode.None);
+                foreach (var bullet in bullets)
                 {
-                    if (null != bullet.GetComponent<Player>())
-                        continue;
+                    if (null != bullet && bullet.gameObject.activeInHierarchy)
+                    {
+                        if (null != bullet.GetComponent<Player>())
+                            continue;
 
-                    if (null != BulletManager.Instance)
-                        BulletManager.Instance.Return(bullet);
-                    else
                         Destroy(bullet.gameObject);
+                    }
                 }
             }
         }

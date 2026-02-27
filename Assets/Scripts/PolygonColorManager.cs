@@ -123,11 +123,8 @@ namespace ShapeShooter
         private void CreateIndependentPolygons()
         {
             Mesh originalMesh = meshFilter.sharedMesh;
-            if (null != meshCollider)
-            {
-                if (null != meshCollider.sharedMesh)
-                    originalMesh = meshCollider.sharedMesh;
-            }
+            if (null != meshCollider && null != meshCollider.sharedMesh)
+                originalMesh = meshCollider.sharedMesh;
             int[] origTris = originalMesh.triangles;
             Vector3[] origVerts = originalMesh.vertices;
             Vector3[] origNorms = originalMesh.normals;
@@ -295,7 +292,7 @@ namespace ShapeShooter
             Vector3 h = Vector3.Cross(rayDir, edge2);
             float a = Vector3.Dot(edge1, h);
 
-            if (a > -EPSILON && a < EPSILON)
+            if (-EPSILON < a && EPSILON > a)
                 return false; // 해당 광선 벡터가 삼면과 평행 구도에 있어 교차불능(Parallel) 상태임을 시사합니다.
 
             float f = 1.0f / a;
@@ -318,7 +315,7 @@ namespace ShapeShooter
         private int FindHitTriangleByRaycast(Vector3 hitPointWorld, Vector3 rayForwardWorld)
         {
             // 투사체의 로컬-월드 좌표 트랜스폼 역순행을 도출하고 연장선상의 광선을 재구성합니다.
-            Vector3 originWorld = hitPointWorld - rayForwardWorld * 2.0f;
+            Vector3 originWorld = hitPointWorld - 2.0f * rayForwardWorld;
             Vector3 localOrigin = transform.InverseTransformPoint(originWorld);
             Vector3 localDir = transform.InverseTransformDirection(rayForwardWorld).normalized;
 
@@ -333,13 +330,10 @@ namespace ShapeShooter
                 Vector3 v1 = vertices[vIdx + 1];
                 Vector3 v2 = vertices[vIdx + 2];
 
-                if (IntersectRayTriangle(localOrigin, localDir, v0, v1, v2, out float t))
+                if (IntersectRayTriangle(localOrigin, localDir, v0, v1, v2, out float t) && t < closestT)
                 {
-                    if (t < closestT)
-                    {
-                        closestT = t;
-                        bestTriangle = i;
-                    }
+                    closestT = t;
+                    bestTriangle = i;
                 }
             }
 

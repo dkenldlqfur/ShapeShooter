@@ -25,7 +25,11 @@ namespace ShapeShooter
 
         [Header("시작 화면")]
         [SerializeField] private Button startBtn;
+        [SerializeField] private Button mainExitBtn;
         [SerializeField] private GameObject gameInfoPanelObj;
+
+        [Header("인게임 화면")]
+        [SerializeField] private Button inGameExitBtn;
 
         private void Start()
         {
@@ -35,12 +39,24 @@ namespace ShapeShooter
                 startBtn.onClick.AddListener(OnStartButtonClicked);
             }
 
+            if (null != mainExitBtn)
+            {
+                mainExitBtn.onClick.RemoveAllListeners();
+                mainExitBtn.onClick.AddListener(OnExitButtonClicked);
+            }
+
+            if (null != inGameExitBtn)
+            {
+                inGameExitBtn.onClick.RemoveAllListeners();
+                inGameExitBtn.onClick.AddListener(OnExitButtonClicked);
+            }
+
             if (null != GameManager.Instance)
                 GameManager.Instance.OnStageChanged += OnStageChanged;
 
             ShowStartBtn();
             InitCountdownText();
-            UpdateUILoop().Forget();
+            UpdateUILoop(this.GetCancellationTokenOnDestroy()).Forget();
         }
 
         /// <summary>
@@ -71,6 +87,9 @@ namespace ShapeShooter
             if (null != startBtn)
                 startBtn.gameObject.SetActive(false);
 
+            if (null != mainExitBtn)
+                mainExitBtn.gameObject.SetActive(false);
+
             if (null != gameInfoPanelObj)
                 gameInfoPanelObj.SetActive(true);
 
@@ -82,12 +101,24 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 메인 타이틀(대기) 화면 상태의 가시성을 복원합니다.
+        /// 애플리케이션 수명 주기를 강제 종료하는 이벤트 콜백입니다. 에디터 환경과 빌드 환경을 모두 제어합니다.
         /// </summary>
+        public void OnExitButtonClicked()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
         public void ShowStartBtn()
         {
             if (null != startBtn)
                 startBtn.gameObject.SetActive(true);
+
+            if (null != mainExitBtn)
+                mainExitBtn.gameObject.SetActive(true);
 
             if (null != gameInfoPanelObj)
                 gameInfoPanelObj.SetActive(false);
@@ -102,7 +133,12 @@ namespace ShapeShooter
         private void OnStageChanged(int stageNumber)
         {
             if (null != stageText)
-                stageText.text = $"Stage {stageNumber}";
+            {
+                if (GameManager.HasInstance && stageNumber == GameManager.Instance.TotalStages)
+                    stageText.text = "FINAL STAGE";
+                else
+                    stageText.text = $"Stage {stageNumber}";
+            }
 
             // 뷰 모델 표기 인덱스와 데이터베이스 탐색 인덱스의 오프셋 동기화입니다.
             UpdateRecordUI(stageNumber - 1);
@@ -119,20 +155,16 @@ namespace ShapeShooter
             var record = GameManager.Instance.GetStageRecord(stageIndex);
 
             if (null != recordTimeText)
-            {
                 if (record.hasRecord)
                     recordTimeText.text = $"최고 시간: {record.clearTime:F2}초";
                 else
                     recordTimeText.text = "최고 시간: --";
-            }
 
             if (null != recordShotsText)
-            {
                 if (record.hasRecord)
                     recordShotsText.text = $"최소 탄환: {record.shotCount}발";
                 else
                     recordShotsText.text = "최소 탄환: --";
-            }
         }
 
         /// <summary>
@@ -150,9 +182,9 @@ namespace ShapeShooter
         /// <summary>
         /// 싱글턴 매니저에 누적된 시간/자원 소모량 변동치를 매 프레임별로 UI 노드에 동기화시키는 비동기 작업입니다.
         /// </summary>
-        private async UniTaskVoid UpdateUILoop()
+        private async UniTaskVoid UpdateUILoop(System.Threading.CancellationToken token)
         {
-            while (null != this)
+            while (!token.IsCancellationRequested)
             {
                 if (null != GameManager.Instance && GameManager.Instance.IsGameActive)
                 {
@@ -163,7 +195,7 @@ namespace ShapeShooter
                         shotCountText.text = $"탄환: {GameManager.Instance.ShotCount}발";
                 }
 
-                await UniTask.Yield(PlayerLoopTiming.Update);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
             }
         }
 

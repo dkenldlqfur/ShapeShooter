@@ -76,7 +76,7 @@ namespace ShapeShooter
         private void HandleMovement()
         {
             var input = moveAction.ReadValue<Vector2>();
-            var moveDir = (transform.right * input.x) + (transform.up * input.y);
+            var moveDir = (input.x * transform.right) + (input.y * transform.up);
 
             if (0.001f > moveDir.sqrMagnitude)
                 return;

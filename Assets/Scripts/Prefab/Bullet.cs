@@ -74,9 +74,7 @@ namespace ShapeShooter
 
             // 루프 종료 시점 (시간 초과 등)
             if (!isReturning)
-            {
                 ReturnToPool();
-            }
         }
 
         /// <summary>

@@ -53,17 +53,15 @@ namespace ShapeShooter
                     var go = Instantiate(prefabs[prefabPath], transform);
                     var sys = go.GetComponent<ParticleSystem>();
                     var returner = go.AddComponent<ParticlePoolReturner>();
-                    // We assign the pool lazily when the particles are fetched if needed, 
-                    // or rely on a setup method to break the circular dependency.
+                    // 필요 시 파티클을 콜백으로 호출할 때 풀을 지연 할당하거나,
+                    // 순환 참조를 끊기 위한 설정 단계에 의존하여 할당합니다.
                     return sys;
                 },
                 actionOnGet: ps => {
                     ps.gameObject.SetActive(true);
                     var returner = ps.GetComponent<ParticlePoolReturner>();
-                    if (returner != null && returner.Pool == null)
-                    {
-                        returner.Pool = pools[prefabPath]; // Safe because pools[prefabPath] is assigned right after ObjectPool constructor
-                    }
+                    if (null != returner && null == returner.Pool)
+                        returner.Pool = pools[prefabPath]; // ObjectPool 생성자 직후에 pools[prefabPath]가 할당되므로 참조에 안전합니다.
                 },
                 actionOnRelease: ps => ps.gameObject.SetActive(false),
                 actionOnDestroy: ps => Destroy(ps.gameObject),
@@ -110,9 +108,21 @@ namespace ShapeShooter
             Vector3 debrisDir = Vector3.Slerp(hitNormal, reflectDir, 0.5f).normalized;
             ps.transform.rotation = Quaternion.LookRotation(debrisDir);
 
-            var mesh = BuildTriangleMesh(v0 - center, v1 - center, v2 - center);
             var renderer = ps.GetComponent<ParticleSystemRenderer>();
-            renderer.mesh = mesh;
+            var returner = ps.GetComponent<ParticlePoolReturner>();
+
+            if (null == returner.SharedMesh)
+            {
+                // 인스턴스별로 최초 1회만 메쉬를 생성합니다.
+                returner.SharedMesh = BuildTriangleMesh(v0 - center, v1 - center, v2 - center);
+            }
+            else
+            {
+                // 이미 존재한다면 기존 메쉬의 정점만 업데이트하여 메모리(GC) 누적을 방지합니다.
+                UpdateTriangleMesh(returner.SharedMesh, v0 - center, v1 - center, v2 - center);
+            }
+
+            renderer.mesh = returner.SharedMesh;
 
             var main = ps.main;
             main.startColor = color;
@@ -155,6 +165,15 @@ namespace ShapeShooter
             mesh.RecalculateBounds();
             return mesh;
         }
+
+        /// <summary>
+        /// 생성된 메쉬의 정점 데이터만 업데이트하여 메모리 재할당을 방지합니다.
+        /// </summary>
+        private void UpdateTriangleMesh(Mesh mesh, Vector3 v0, Vector3 v1, Vector3 v2)
+        {
+            mesh.SetVertices(new[] { v0, v1, v2 });
+            mesh.RecalculateBounds();
+        }
     }
 
     /// <summary>
@@ -164,11 +183,21 @@ namespace ShapeShooter
     public class ParticlePoolReturner : MonoBehaviour
     {
         public IObjectPool<ParticleSystem> Pool { get; set; }
+        public Mesh SharedMesh { get; set; }
+        
         private ParticleSystem ps;
 
         private void Awake()
         {
             ps = GetComponent<ParticleSystem>();
+        }
+
+        private void OnDestroy()
+        {
+            if (null != SharedMesh)
+            {
+                Destroy(SharedMesh);
+            }
         }
 
         private void OnParticleSystemStopped()

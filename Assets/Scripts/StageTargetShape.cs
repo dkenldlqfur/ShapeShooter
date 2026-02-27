@@ -150,7 +150,7 @@ namespace ShapeShooter
                 cts.Cancel();
                 cts.Dispose();
             }
-            cts = new();
+            cts = new CancellationTokenSource();
 
             RotateLoop(axis, cts.Token).Forget();
         }
@@ -184,9 +184,13 @@ namespace ShapeShooter
         private async UniTask StopRotationGradually()
         {
             isRotating = false;
-            cts?.Cancel();
-            cts?.Dispose();
-            cts = new();
+            
+            if (null != cts)
+            {
+                cts.Cancel();
+                cts.Dispose();
+            }
+            cts = new CancellationTokenSource();
 
             float duration = 2.0f;
             float elapsed = 0f;
@@ -194,12 +198,15 @@ namespace ShapeShooter
             if (null != currentLevelData)
                 startSpeed = currentLevelData.rotationSpeed;
 
-            while (elapsed < duration)
+            var transformRef = transform;
+            var token = this.GetCancellationTokenOnDestroy();
+
+            while (elapsed < duration && !token.IsCancellationRequested && null != transformRef)
             {
                 elapsed += Time.deltaTime;
                 float currentSpeed = Mathf.Lerp(startSpeed, 0f, elapsed / duration);
-                transform.Rotate(currentSpeed * Time.deltaTime * Vector3.up);
-                await UniTask.Yield(PlayerLoopTiming.Update);
+                transformRef.Rotate(currentSpeed * Time.deltaTime * Vector3.up);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
             }
         }
 

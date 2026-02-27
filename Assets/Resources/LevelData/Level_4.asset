@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bc00740d4af03b249adf4028bad7442f, type: 3}
   m_Name: Level_4
   m_EditorClassIdentifier: Assembly-CSharp::ShapeShooter.Core.LevelData
-  shapePrefab: {fileID: 3238992485803204532, guid: fc9d52d8c9fd1c04dabcc96f3e75292b, type: 3}
+  shapePrefab: {fileID: 9003269521268713291, guid: 4bf90aefd5de63f4aae90bd8b5d8012b, type: 3}
   rotationSpeed: 60
-  rotationPattern: 3
-  requiredHitsPerFace: 3
+  rotationPattern: 4
+  requiredHitsPerPolygon: 4

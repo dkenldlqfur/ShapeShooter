@@ -79,6 +79,8 @@ namespace ShapeShooter
             countdownText.gameObject.SetActive(false);
         }
 
+        public event System.Action OnGameStartRequested;
+
         /// <summary>
         /// 시작 트리거 이벤트 콜백입니다. 대기 상태를 파기하고 메인 게임세션을 지시합니다.
         /// </summary>
@@ -93,11 +95,8 @@ namespace ShapeShooter
             if (null != gameInfoPanelObj)
                 gameInfoPanelObj.SetActive(true);
 
-            if (null != GameManager.Instance)
-            {
-                UpdateRecordUI(0);
-                GameManager.Instance.StartGame().Forget();
-            }
+            UpdateRecordUI(0);
+            OnGameStartRequested?.Invoke();
         }
 
         /// <summary>

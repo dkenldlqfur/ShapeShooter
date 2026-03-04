@@ -7,5 +7,28 @@ namespace ShapeShooter
     /// </summary>
     public class ShapeShooterScene : MonoBehaviour
     {
+        [SerializeField] private GameUI cachedGameUI;
+
+        private void Start()
+        {
+            if (null == cachedGameUI)
+                cachedGameUI = FindAnyObjectByType<GameUI>();
+
+            if (null != cachedGameUI)
+                cachedGameUI.OnGameStartRequested += HandleGameStartRequested;
+        }
+
+        private void OnDestroy()
+        {
+            if (null != cachedGameUI)
+                cachedGameUI.OnGameStartRequested -= HandleGameStartRequested;
+        }
+
+        private void HandleGameStartRequested()
+        {
+            // 이 씬에 진입했을 때의 초기화 로직 순서를 여기서 제어할 수 있습니다.
+            if (null != GameManager.Instance)
+                GameManager.Instance.StartGame().Forget();
+        }
     }
 }

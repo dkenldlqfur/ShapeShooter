@@ -5,48 +5,10 @@ using UnityEngine;
 namespace ShapeShooter
 {
     /// <summary>
-    /// 개별 스테이지 클리어에 대한 시간 및 소모 탄환 등의 성과 기록을 저장하는 구조체입니다.
-    /// </summary>
-    [Serializable]
-    public struct StageRecord
-    {
-        public float clearTime;
-        public int shotCount;
-        public bool hasRecord;
-    }
-
-    /// <summary>
     /// 전반적인 게임의 흐름(레벨 전환, 시작/종료 처리, 기록 저장)을 제어하는 최상위 싱글톤 매니저입니다.
     /// </summary>
-    public class GameManager : MonoBehaviour
+    public class GameManager : Singleton<GameManager>
     {
-        private static GameManager instance;
-        private static bool applicationIsQuitting = false;
-
-        public static bool HasInstance => null != instance;
-
-        public static GameManager Instance
-        {
-            get
-            {
-                if (applicationIsQuitting)
-                    return null;
-
-                if (null == instance)
-                {
-                    instance = FindAnyObjectByType<GameManager>();
-                    if (null == instance)
-                    {
-                        var go = new GameObject("GameManager");
-                        instance = go.AddComponent<GameManager>();
-                        instance.InitializeDefaults();
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return instance;
-            }
-        }
-
         public event Action<int> OnStageChanged;
         public event Action OnGameClear;
         public event Action OnGameOver;
@@ -56,6 +18,8 @@ namespace ShapeShooter
 
         [Header("Levels")]
         [SerializeField] private LevelData[] levels;
+
+        private GameSettings gameSettings;
 
         public int TotalStages
         {
@@ -75,27 +39,16 @@ namespace ShapeShooter
         private GameObject currentPlayer;
         private GameObject currentShapeGameObj;
         private Camera sceneMainCamera;
-
-        [Header("Game Settings")]
-        [SerializeField] private GameSettings gameSettings;
-
-
-        private void OnApplicationQuit()
-        {
-            applicationIsQuitting = true;
-        }
-
-        private void OnDestroy()
-        {
-            if (instance == this)
-                instance = null;
-        }
+        private GameUI cachedGameUI;
 
         /// <summary>
-        /// 에디터의 Inspector를 통해 초기 값이 할당되지 않았을 경우, `Resources` 폴더 내 기본값으로 자동 대체 초기화합니다.
+        /// 싱글톤 초기화 시점에 Resources 폴더로부터 필수 데이터를 자동 로딩합니다.
         /// </summary>
-        private void InitializeDefaults()
+        protected override void Init()
         {
+            if (null == gameSettings)
+                gameSettings = Resources.Load<GameSettings>("GameData/GameSettings");
+
             if (null == playerPrefab)
                 playerPrefab = Resources.Load<GameObject>("Prefabs/Player");
 
@@ -105,10 +58,20 @@ namespace ShapeShooter
                 
                 if (null != loadedLevels && 0 < loadedLevels.Length)
                 {
-                    System.Array.Sort(loadedLevels, (a, b) => a.name.CompareTo(b.name));
+                    Array.Sort(loadedLevels, (a, b) => a.name.CompareTo(b.name));
                     levels = loadedLevels;
                 }
             }
+        }
+
+        /// <summary>
+        /// 캐싱된 GameUI 참조를 반환합니다. 캐시 미스 시 씬에서 탐색합니다.
+        /// </summary>
+        private GameUI GetGameUI()
+        {
+            if (null == cachedGameUI)
+                cachedGameUI = FindAnyObjectByType<GameUI>();
+            return cachedGameUI;
         }
 
         #region 게임 흐름
@@ -119,6 +82,9 @@ namespace ShapeShooter
         /// </summary>
         public async UniTaskVoid StartGame()
         {
+            // 스테이지 전환 시 캐싱된 GameUI 참조를 갱신합니다.
+            cachedGameUI = null;
+
             if (null != playerPrefab)
                 currentPlayer = Instantiate(playerPrefab);
 
@@ -140,7 +106,7 @@ namespace ShapeShooter
 
             CurrentStageIndex = 0;
             
-            bool loaded = await LoadStage(CurrentStageIndex, false);
+            var loaded = await LoadStage(CurrentStageIndex, false);
             if (loaded)
                 await StartCountdown();
         }
@@ -152,7 +118,7 @@ namespace ShapeShooter
         private async UniTask StartCountdown()
         {
             IsGameActive = false;
-            var gameUI = FindAnyObjectByType<GameUI>();
+            var gameUI = GetGameUI();
 
             int currentCountdownStart = 3;
             if (null != gameSettings)
@@ -170,7 +136,7 @@ namespace ShapeShooter
             {
                 if (null != gameUI)
                 {
-                    string stageString = $"Stage {CurrentStageIndex + 1}";
+                    var stageString = $"Stage {CurrentStageIndex + 1}";
                     if (CurrentStageIndex + 1 == TotalStages)
                         stageString = "FINAL STAGE";
 
@@ -214,9 +180,8 @@ namespace ShapeShooter
             if (null != currentShapeGameObj)
                 Destroy(currentShapeGameObj);
 
-            if (null != currentPlayer)
-                if (currentPlayer.TryGetComponent<Player>(out var playerComp))
-                    playerComp.ResetPosition();
+            if (null != currentPlayer && currentPlayer.TryGetComponent<Player>(out var playerComp))
+                playerComp.ResetPosition();
 
             var levelData = levels[stageIndex];
             if (null != levelData && null != levelData.shapePrefab)
@@ -270,9 +235,9 @@ namespace ShapeShooter
 
             IsGameActive = false;
 
-            SaveStageRecord(CurrentStageIndex, StageTimer, ShotCount);
+            StageRecordRepository.Save(CurrentStageIndex, StageTimer, ShotCount);
 
-            var gameUI = FindAnyObjectByType<GameUI>();
+            var gameUI = GetGameUI();
             if (null != gameUI)
                 gameUI.SetCountdownText("스테이지 클리어!");
 
@@ -287,7 +252,7 @@ namespace ShapeShooter
 
             await UniTask.Delay(currentStageClearDisplayMs);
 
-            bool loaded = await LoadStage(CurrentStageIndex + 1, false);
+            var loaded = await LoadStage(CurrentStageIndex + 1, false);
             if (loaded)
                 await StartCountdown();
         }
@@ -308,7 +273,7 @@ namespace ShapeShooter
             IsGameActive = false;
             ClearAllBullets();
 
-            var gameUI = FindAnyObjectByType<GameUI>();
+            var gameUI = GetGameUI();
 
             if (isClear)
             {
@@ -339,6 +304,9 @@ namespace ShapeShooter
 
             if (null != sceneMainCamera)
                 sceneMainCamera.gameObject.SetActive(true);
+
+            // 게임 종료 시 캐싱된 GameUI 참조를 초기화합니다.
+            cachedGameUI = null;
         }
 
         /// <summary>
@@ -347,9 +315,7 @@ namespace ShapeShooter
         private void ClearAllBullets()
         {
             if (null != BulletManager.Instance)
-            {
                 BulletManager.Instance.ClearAllActiveBullets();
-            }
             else
             {
                 // BulletManager가 누락되었을 경우를 대비한 안전망(Fallback) 대응입니다.
@@ -382,38 +348,11 @@ namespace ShapeShooter
         }
 
         /// <summary>
-        /// 입력된 시간과 횟수가 과거 최고 기록보다 우수할 경우 로컬 스토리지 볼륨에 영구 보존합니다.
-        /// </summary>
-        public void SaveStageRecord(int stageIndex, float time, int shots)
-        {
-            var existing = GetStageRecord(stageIndex);
-
-            if (!existing.hasRecord || time < existing.clearTime)
-            {
-                PlayerPrefs.SetFloat($"Stage_{stageIndex}_Time", time);
-                PlayerPrefs.SetInt($"Stage_{stageIndex}_Shots", shots);
-                PlayerPrefs.SetInt($"Stage_{stageIndex}_HasRecord", 1);
-                PlayerPrefs.Save();
-            }
-        }
-
-        /// <summary>
-        /// 저장소에 기록된 스테이지별 세부 퍼포먼스 내역을 복원합니다.
+        /// StageRecordRepository로 위임하여 스테이지 기록을 조회합니다.
         /// </summary>
         public StageRecord GetStageRecord(int stageIndex)
         {
-            var record = new StageRecord
-            {
-                hasRecord = 1 == PlayerPrefs.GetInt($"Stage_{stageIndex}_HasRecord", 0)
-            };
-
-            if (record.hasRecord)
-            {
-                record.clearTime = PlayerPrefs.GetFloat($"Stage_{stageIndex}_Time", 0f);
-                record.shotCount = PlayerPrefs.GetInt($"Stage_{stageIndex}_Shots", 0);
-            }
-
-            return record;
+            return StageRecordRepository.Load(stageIndex);
         }
 
         #endregion

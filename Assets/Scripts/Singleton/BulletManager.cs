@@ -7,42 +7,29 @@ namespace ShapeShooter
     /// 발사체(Bullet) 객체들의 생성, 반환, 제거 및 재사용을 담당하는 오브젝트 풀 매니저입니다.
     /// 메모리 단편화를 방지하고 투사체 생성의 최적화를 수행합니다.
     /// </summary>
-    public class BulletManager : MonoBehaviour
+    public class BulletManager : Singleton<BulletManager>
     {
-        private static BulletManager instance;
-
-        public static BulletManager Instance
-        {
-            get
-            {
-                if (null == instance)
-                {
-                    instance = FindAnyObjectByType<BulletManager>();
-                    if (null == instance)
-                    {
-                        var go = new GameObject("BulletManager");
-                        instance = go.AddComponent<BulletManager>();
-                        
-                        var bPrefab = Resources.Load<Bullet>("Prefabs/Bullet");
-                        if (null != bPrefab)
-                        {
-                            instance.bulletPrefab = bPrefab;
-                            instance.InitPool();
-                        }
-
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return instance;
-            }
-        }
-
         [SerializeField] private Bullet bulletPrefab;
         [SerializeField] private int defaultCapacity = 50;
         [SerializeField] private int maxSize = 300;
 
         private IObjectPool<Bullet> pool;
         private readonly System.Collections.Generic.HashSet<Bullet> activeBullets = new();
+
+        /// <summary>
+        /// 싱글톤 초기화 시점에 프리팹 로딩 및 오브젝트 풀을 구성합니다.
+        /// </summary>
+        protected override void Init()
+        {
+            if (null == bulletPrefab)
+            {
+                var loaded = Resources.Load<Bullet>("Prefabs/Bullet");
+                if (null != loaded)
+                    bulletPrefab = loaded;
+            }
+
+            InitPool();
+        }
 
         private void InitPool()
         {
@@ -102,9 +89,7 @@ namespace ShapeShooter
             foreach (var bullet in bulletsToReturn)
             {
                 if (null != bullet && bullet.gameObject.activeInHierarchy)
-                {
                     Return(bullet);
-                }
             }
             
             activeBullets.Clear();

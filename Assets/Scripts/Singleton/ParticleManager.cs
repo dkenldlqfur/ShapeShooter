@@ -1,4 +1,3 @@
-using Cysharp.Threading.Tasks;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Pool;
@@ -8,34 +7,22 @@ namespace ShapeShooter
     /// <summary>
     /// 피격 시 발생하는 폴리곤 형상 파편 파티클의 오브젝트 풀 관리 및 이펙트 재생을 전담하는 싱글톤 매니저입니다.
     /// </summary>
-    public class ParticleManager : MonoBehaviour
+    public class ParticleManager : Singleton<ParticleManager>
     {
-        private static ParticleManager instance;
-
-        public static ParticleManager Instance
-        {
-            get
-            {
-                if (null == instance)
-                {
-                    instance = FindAnyObjectByType<ParticleManager>();
-                    if (null == instance)
-                    {
-                        var go = new GameObject("ParticleManager");
-                        instance = go.AddComponent<ParticleManager>();
-                        instance.InitPool();
-                        DontDestroyOnLoad(go);
-                    }
-                }
-                return instance;
-            }
-        }
-
         [SerializeField] private int defaultCapacity = 30;
         [SerializeField] private int maxSize = 100;
 
         private readonly Dictionary<string, IObjectPool<ParticleSystem>> pools = new();
         private readonly Dictionary<string, GameObject> prefabs = new();
+
+        /// <summary>
+        /// 싱글톤 초기화 시점에 기본 파티클 풀들을 사전 구성합니다.
+        /// </summary>
+        protected override void Init()
+        {
+            GetPool("Prefabs/Particles/HitParticle");
+            GetPool("Prefabs/Particles/MuzzleFlash");
+        }
 
         private IObjectPool<ParticleSystem> GetPool(string prefabPath)
         {
@@ -52,7 +39,7 @@ namespace ShapeShooter
                 createFunc: () => {
                     var go = Instantiate(prefabs[prefabPath], transform);
                     var sys = go.GetComponent<ParticleSystem>();
-                    var returner = go.AddComponent<ParticlePoolReturner>();
+                    go.AddComponent<ParticlePoolReturner>();
                     // 필요 시 파티클을 콜백으로 호출할 때 풀을 지연 할당하거나,
                     // 순환 참조를 끊기 위한 설정 단계에 의존하여 할당합니다.
                     return sys;
@@ -73,13 +60,6 @@ namespace ShapeShooter
             return objPool;
         }
 
-        private void InitPool()
-        {
-            GetPool("Prefabs/Particles/HitParticle");
-            GetPool("Prefabs/Particles/MuzzleFlash");
-        }
-
-
         /// <summary>
         /// 피격된 삼각형의 월드 좌표 꼭짓점 3개와 표면 노멀, 색상을 받아 기본 파편 파티클(`HitParticle`)을 재생합니다.
         /// </summary>
@@ -99,13 +79,13 @@ namespace ShapeShooter
 
             var ps = targetPool.Get();
 
-            Vector3 center = (v0 + v1 + v2) / 3f;
+            var center = (v0 + v1 + v2) / 3f;
             ps.transform.position = center;
 
             // 발사체 방향과 표면 노멀의 반사 벡터를 산출하여 파편 비산 방향을 결정합니다.
-            Vector3 reflectDir = Vector3.Reflect(bulletForward, hitNormal).normalized;
+            var reflectDir = Vector3.Reflect(bulletForward, hitNormal).normalized;
             // 반사 벡터와 표면 노멀을 혼합하여 자연스러운 파편 비산 각도를 산출합니다.
-            Vector3 debrisDir = Vector3.Slerp(hitNormal, reflectDir, 0.5f).normalized;
+            var debrisDir = Vector3.Slerp(hitNormal, reflectDir, 0.5f).normalized;
             ps.transform.rotation = Quaternion.LookRotation(debrisDir);
 
             var renderer = ps.GetComponent<ParticleSystemRenderer>();
@@ -195,9 +175,7 @@ namespace ShapeShooter
         private void OnDestroy()
         {
             if (null != SharedMesh)
-            {
                 Destroy(SharedMesh);
-            }
         }
 
         private void OnParticleSystemStopped()

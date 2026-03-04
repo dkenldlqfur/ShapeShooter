@@ -20,7 +20,7 @@ namespace ShapeShooter
     /// 메쉬 데이터를 폴리곤 단위의 하위 엔티티로 분석 및 분할하여 독립적인 그래픽스와 상태 데이터를 부여하는 매니저 클래스입니다.
     /// Ray 충돌 기반의 정확한 타격 지점 산출과 이에 따른 정점 색상 갱신 파이프라인을 일괄 제어합니다.
     /// </summary>
-    public class PolygonColorManager : MonoBehaviour
+    public class PolygonControlComponent : MonoBehaviour
     {
         private const float RESTORE_DURATION = 0.8f;
 
@@ -247,8 +247,8 @@ namespace ShapeShooter
                 if (1f <= anim.progress)
                 {
                     // 애니메이션 완료: 최종 색상을 전체 Alpha 값으로 확정합니다.
+                    // HP는 1로 유지하여 표시 색상(빨간색=HP1)과 내부 상태를 일치시킵니다.
                     anim.progress = 1f;
-                    polygonGroups[anim.groupIndex].currentHP = polygonGroups[anim.groupIndex].maxHP;
                     SetPolygonColor(polygonGroups[anim.groupIndex].vertexBase, anim.targetColor, 1f);
                     activeRestoreAnimations.RemoveAt(i);
                 }

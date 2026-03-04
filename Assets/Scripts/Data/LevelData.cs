@@ -29,8 +29,6 @@ namespace ShapeShooter
     {
         /// <summary>월드 축 상에서의 고정 형태</summary>
         Static,
-        /// <summary>특정 단일 축을 기준으로 하는 스핀오프</summary>
-        SingleAxis,
         /// <summary>복합 다중 축을 결합한 스핀오프</summary>
         MultiAxis,
         /// <summary>주기적 전환 임의 축 스핀오프</summary>

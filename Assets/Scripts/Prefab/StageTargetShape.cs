@@ -13,7 +13,7 @@ namespace ShapeShooter
         /// <summary>단일축(SingleAxis) 패턴 적용 시 무작위로 채택되는 3방향의 로컬 직교 기저 벡터입니다.</summary>
         private static readonly Vector3[] CARDINAL_AXES = { Vector3.right, Vector3.up, Vector3.forward };
 
-        private PolygonColorManager[] polygonManagers;
+        private PolygonControlComponent[] polygonManagers;
         private LevelData currentLevelData;
         private CancellationTokenSource cts;
         private bool isRotating = false;
@@ -37,11 +37,11 @@ namespace ShapeShooter
             var filters = GetComponentsInChildren<MeshFilter>();
             foreach (var filter in filters)
             {
-                if (null != filter.GetComponent<MeshCollider>() && null == filter.GetComponent<PolygonColorManager>())
-                    filter.gameObject.AddComponent<PolygonColorManager>();
+                if (null != filter.GetComponent<MeshCollider>() && null == filter.GetComponent<PolygonControlComponent>())
+                    filter.gameObject.AddComponent<PolygonControlComponent>();
             }
 
-            polygonManagers = GetComponentsInChildren<PolygonColorManager>();
+            polygonManagers = GetComponentsInChildren<PolygonControlComponent>();
             
             if (null == polygonManagers || 0 == polygonManagers.Length)
                 return;
@@ -162,7 +162,6 @@ namespace ShapeShooter
         {
             return pattern switch
             {
-                RotationPatternType.SingleAxis      => CARDINAL_AXES[Random.Range(0, CARDINAL_AXES.Length)],
                 RotationPatternType.MultiAxis       => new Vector3(Random.value, Random.value, Random.value).normalized,
                 RotationPatternType.ReactiveAxis    => Random.onUnitSphere,
                 _ => Vector3.zero
@@ -223,23 +222,27 @@ namespace ShapeShooter
                 switch (currentLevelData.rotationPattern)
                 {
                     case RotationPatternType.Static:
+                    {
                         await UniTask.Yield(PlayerLoopTiming.Update, token);
                         break;
-
-                    case RotationPatternType.SingleAxis:
+                    }
                     case RotationPatternType.MultiAxis:
+                    {
                         RotateFixedAxis(axis);
                         await UniTask.Yield(PlayerLoopTiming.Update, token);
                         break;
-
+                    }
                     case RotationPatternType.ReactiveAxis:
+                    {
                         RotateFixedAxis(reactiveAxis);
                         await UniTask.Yield(PlayerLoopTiming.Update, token);
                         break;
-
+                    }
                     case RotationPatternType.Random:
+                    {
                         await RotateRandom(token);
                         break;
+                    }
                 }
             }
         }

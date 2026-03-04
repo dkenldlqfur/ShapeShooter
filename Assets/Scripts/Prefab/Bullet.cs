@@ -60,7 +60,7 @@ namespace ShapeShooter
                 // 프레임 델타에 비례한 다음 예상 이동 좌표값을 향해 Raycast를 쏘아 관통 이탈 오류를 추적합니다.
                 if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, moveDistance))
                 {
-                    var polygonManager = hit.collider.GetComponentInParent<PolygonColorManager>();
+                    var polygonManager = hit.collider.GetComponentInParent<PolygonControlComponent>();
                     if (null != polygonManager)
                         polygonManager.OnHitAccurate(hit.point, hit.normal, transform.forward, hit.triangleIndex);
 

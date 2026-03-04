@@ -1,0 +1,79 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Default Local Group
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Default Local Group
+  m_Data:
+    m_SerializedData: []
+  m_GUID: d1f7565d9a43dd94e9b875aa7f57d32b
+  m_SerializeEntries:
+  - m_GUID: b6efbcabee1406946b4c2c976cc8aa59
+    m_Address: GameData/GameSettings
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad5e75e971a529343b3644004e04bb15
+    m_Address: Assets/AddressableResources/LevelData/Level_1.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LevelData
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c024661c407ae1b408b94c6594de5c20
+    m_Address: Assets/AddressableResources/LevelData/Level_2.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LevelData
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1547f160e791224599de104d175f32b
+    m_Address: Assets/AddressableResources/LevelData/Level_3.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LevelData
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d1b6821c10c10e043ba2044a2235d1de
+    m_Address: Assets/AddressableResources/LevelData/Level_4.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LevelData
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 24da0eebf5c825c42a1a14d94d607c40
+    m_Address: Prefabs/Player
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 77a09ed91e3b3434bb03388a52d57dd0
+    m_Address: Prefabs/Bullet
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4122f4615294f844a877e522264cf67a
+    m_Address: Prefabs/Particles/HitParticle
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c36c9d6374a96a947a92494a36d764cb
+    m_Address: Prefabs/Particles/MuzzleFlash
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 052faaac586de48259a63d0c4782560b
+    m_Address: InputSystem_Actions
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 127a2b73be2fb3e4a8d0b3de18671aaa, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 6cf1048ac0eb907449988d23bd6676b6, type: 2}
+    - {fileID: 11400000, guid: 2dc3d4879ad3da14fbade85631550079, type: 2}

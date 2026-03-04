@@ -1,3 +1,4 @@
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -20,40 +21,75 @@ namespace ShapeShooter
 
         private Vector3 initialPosition;
         private Quaternion initialRotation;
+        
+        private bool isInputReady = false;
 
         private void Awake()
         {
             playerCamera = GetComponentInChildren<Camera>();
 
-            var inputAsset = Resources.Load<InputActionAsset>("InputSystem_Actions");
+            initialPosition = transform.position;
+            initialRotation = transform.rotation;
+        }
+
+        private void Start()
+        {
+            InitInputAsync().Forget();
+        }
+
+        private async UniTaskVoid InitInputAsync()
+        {
+            // AssetManager의 초기화가 선행되어야 합니다.
+            await UniTask.WaitUntil(() => null != AssetManager.Instance && AssetManager.Instance.IsInitComplete);
+
+            var inputAsset = await AssetManager.Instance.LoadAssetAsync<InputActionAsset>("InputSystem_Actions");
+            if (null == inputAsset)
+                return;
+
             var playerMap = inputAsset.FindActionMap("Player");
             
             moveAction = playerMap.FindAction("Move");
             fireAction = playerMap.FindAction("Attack");
             boostAction = playerMap.FindAction("Sprint");
 
-            initialPosition = transform.position;
-            initialRotation = transform.rotation;
+            isInputReady = true;
+
+            if (gameObject.activeInHierarchy)
+            {
+                moveAction.Enable();
+                fireAction.Enable();
+                boostAction.Enable();
+                fireAction.performed += OnFire;
+            }
         }
 
         private void OnEnable()
         {
-            moveAction.Enable();
-            fireAction.Enable();
-            boostAction.Enable();
-            fireAction.performed += OnFire;
+            if (isInputReady)
+            {
+                moveAction.Enable();
+                fireAction.Enable();
+                boostAction.Enable();
+                fireAction.performed += OnFire;
+            }
         }
 
         private void OnDisable()
         {
-            moveAction.Disable();
-            fireAction.Disable();
-            boostAction.Disable();
-            fireAction.performed -= OnFire;
+            if (isInputReady)
+            {
+                moveAction.Disable();
+                fireAction.Disable();
+                boostAction.Disable();
+                fireAction.performed -= OnFire;
+            }
         }
 
         private void Update()
         {
+            if (!isInputReady)
+                return;
+
             if (null != GameManager.Instance && !GameManager.Instance.IsGameActive)
                 return;
 

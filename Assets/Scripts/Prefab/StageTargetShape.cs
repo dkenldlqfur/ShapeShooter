@@ -243,6 +243,11 @@ namespace ShapeShooter
                         await RotateRandom(token);
                         break;
                     }
+                    default:
+                    {
+                        await UniTask.Yield(PlayerLoopTiming.Update, token);
+                        break;
+                    }
                 }
             }
         }

@@ -40,28 +40,41 @@ namespace ShapeShooter
         private GameObject currentShapeGameObj;
         private Camera sceneMainCamera;
         private GameUI cachedGameUI;
+        private bool isInitComplete = false;
 
         /// <summary>
-        /// 싱글톤 초기화 시점에 Resources 폴더로부터 필수 데이터를 자동 로딩합니다.
+        /// 싱글톤 초기화 시점에 비동기로 Addressables 에셋 로딩을 지시합니다.
         /// </summary>
         protected override void Init()
         {
+            InitAsync().Forget();
+        }
+
+        private async UniTaskVoid InitAsync()
+        {
+            // AssetManager의 초기화가 선행되어야 합니다.
+            await UniTask.WaitUntil(() => null != AssetManager.Instance && AssetManager.Instance.IsInitComplete);
+
             if (null == gameSettings)
-                gameSettings = Resources.Load<GameSettings>("GameData/GameSettings");
+                gameSettings = await AssetManager.Instance.LoadAssetAsync<GameSettings>("GameData/GameSettings");
 
             if (null == playerPrefab)
-                playerPrefab = Resources.Load<GameObject>("Prefabs/Player");
+                playerPrefab = await AssetManager.Instance.LoadAssetAsync<GameObject>("Prefabs/Player");
 
             if (null == levels || 0 == levels.Length)
             {
-                var loadedLevels = Resources.LoadAll<LevelData>("LevelData");
+                var loadedLevels = await AssetManager.Instance.LoadAssetsAsync<LevelData>("LevelData");
                 
-                if (null != loadedLevels && 0 < loadedLevels.Length)
+                if (null != loadedLevels && 0 < loadedLevels.Count)
                 {
-                    Array.Sort(loadedLevels, (a, b) => a.name.CompareTo(b.name));
-                    levels = loadedLevels;
+                    var array = new LevelData[loadedLevels.Count];
+                    loadedLevels.CopyTo(array, 0);
+                    Array.Sort(array, (a, b) => a.name.CompareTo(b.name));
+                    levels = array;
                 }
             }
+
+            isInitComplete = true;
         }
 
         /// <summary>
@@ -82,6 +95,9 @@ namespace ShapeShooter
         /// </summary>
         public async UniTaskVoid StartGame()
         {
+            // 초기화가 완료될 때까지 대기합니다.
+            await UniTask.WaitUntil(() => isInitComplete);
+
             // 스테이지 전환 시 캐싱된 GameUI 참조를 갱신합니다.
             cachedGameUI = null;
 

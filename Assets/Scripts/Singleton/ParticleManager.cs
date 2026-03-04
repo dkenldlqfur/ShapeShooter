@@ -1,3 +1,4 @@
+using Cysharp.Threading.Tasks;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Pool;
@@ -16,12 +17,30 @@ namespace ShapeShooter
         private readonly Dictionary<string, GameObject> prefabs = new();
 
         /// <summary>
-        /// 싱글톤 초기화 시점에 기본 파티클 풀들을 사전 구성합니다.
+        /// 싱글톤 초기화 시점에 기본 파티클 프리팹들을 비동기로 미리 로드하고 풀을 구성합니다.
         /// </summary>
         protected override void Init()
         {
-            GetPool("Prefabs/Particles/HitParticle");
-            GetPool("Prefabs/Particles/MuzzleFlash");
+            InitAsync().Forget();
+        }
+
+        private async UniTaskVoid InitAsync()
+        {
+            await PreloadPrefab("Prefabs/Particles/HitParticle");
+            await PreloadPrefab("Prefabs/Particles/MuzzleFlash");
+        }
+
+        private async UniTask PreloadPrefab(string prefabPath)
+        {
+            if (!prefabs.ContainsKey(prefabPath))
+            {
+                var prefab = await AssetManager.Instance.LoadAssetAsync<GameObject>(prefabPath);
+                if (null != prefab)
+                {
+                    prefabs[prefabPath] = prefab;
+                    GetPool(prefabPath);
+                }
+            }
         }
 
         private IObjectPool<ParticleSystem> GetPool(string prefabPath)
@@ -29,11 +48,8 @@ namespace ShapeShooter
             if (pools.TryGetValue(prefabPath, out var pool))
                 return pool;
 
-            var prefab = Resources.Load<GameObject>(prefabPath);
-            if (null == prefab)
+            if (!prefabs.TryGetValue(prefabPath, out var prefab) || null == prefab)
                 return null;
-
-            prefabs[prefabPath] = prefab;
             
             var objPool = new ObjectPool<ParticleSystem>(
                 createFunc: () => {

@@ -1,3 +1,4 @@
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Pool;
 
@@ -17,15 +18,20 @@ namespace ShapeShooter
         private readonly System.Collections.Generic.HashSet<Bullet> activeBullets = new();
 
         /// <summary>
-        /// 싱글톤 초기화 시점에 프리팹 로딩 및 오브젝트 풀을 구성합니다.
+        /// 싱글톤 초기화 시점에 비동기로 프리팹 로딩 및 오브젝트 풀을 구성합니다.
         /// </summary>
         protected override void Init()
         {
+            InitAsync().Forget();
+        }
+
+        private async UniTaskVoid InitAsync()
+        {
             if (null == bulletPrefab)
             {
-                var loaded = Resources.Load<Bullet>("Prefabs/Bullet");
-                if (null != loaded)
-                    bulletPrefab = loaded;
+                var loaded = await AssetManager.Instance.LoadAssetAsync<GameObject>("Prefabs/Bullet");
+                if (null != loaded && loaded.TryGetComponent<Bullet>(out var comp))
+                    bulletPrefab = comp;
             }
 
             InitPool();

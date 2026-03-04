@@ -3,7 +3,9 @@
     "references": [
         "Unity.InputSystem",
         "Unity.TextMeshPro",
-        "UniTask"
+        "UniTask",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
